@@ -4,7 +4,6 @@ import { AuthService } from '../auth/auth.service';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { VerifyCandidateOtpDto } from './dto/verify-candidate-otp.dto';
 import { LoginCandidateDto } from './dto/login-candidate.dto';
-import { VerifyLoginCandidateOtpDto } from './dto/verify-login-candidate-otp.dto';
 import { UpdateCandidateProfileDto } from './dto/update-candidate-profile.dto';
 import { Response } from 'express';
 import { InjectModel } from '@nestjs/mongoose';
@@ -74,39 +73,22 @@ export class CandidateService {
     }
   }
 
-  async login(loginCandidateDto: LoginCandidateDto): Promise<void> {
+  async login(loginCandidateDto: LoginCandidateDto): Promise<{ access_token: string; refresh_token: string }> {
     try {
-      const { email } = loginCandidateDto;
+      const { email, password } = loginCandidateDto;
       const candidate = await this.candidateModel.findOne({ email });
       
       if (!candidate) {
-        throw new HttpException('Candidat non trouvé', HttpStatus.NOT_FOUND);
+        throw new HttpException('Email ou mot de passe incorrect', HttpStatus.UNAUTHORIZED);
       }
       
       if (!candidate.isVerified) {
         throw new HttpException('Compte non vérifié', HttpStatus.FORBIDDEN);
       }
 
-      await this.otpService.generateOtp(email, { type: 'login' });
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  async verifyLoginOtp(
-    verifyLoginCandidateOtpDto: VerifyLoginCandidateOtpDto,
-  ): Promise<{ access_token: string; refresh_token: string }> {
-    try {
-      const { email, otp } = verifyLoginCandidateOtpDto;
-      const isValid = await this.otpService.verifyOtp(email, otp);
-      
-      if (!isValid) {
-        throw new HttpException('Code OTP invalide ou expiré', HttpStatus.BAD_REQUEST);
-      }
-
-      const candidate = await this.candidateModel.findOne({ email });
-      if (!candidate) {
-        throw new HttpException('Candidat non trouvé', HttpStatus.NOT_FOUND);
+      const isPasswordValid = await bcrypt.compare(password, candidate.password);
+      if (!isPasswordValid) {
+        throw new HttpException('Email ou mot de passe incorrect', HttpStatus.UNAUTHORIZED);
       }
 
       const payload: TokenPayload = {
@@ -116,6 +98,10 @@ export class CandidateService {
       };
 
       const tokens = await this.authService.generateTokens(payload);
+      
+      // Update last login
+      candidate.lastLoginAt = new Date();
+      await candidate.save();
 
       return {
         access_token: tokens.accessToken,
@@ -360,6 +346,22 @@ export class CandidateService {
     } catch (error) {
       console.error('GitHub callback error:', error);
       res.redirect(`${process.env.FRONTEND_URL}/auth/error?message=${encodeURIComponent('Échec de l\'authentification avec GitHub')}`);
+    }
+  }
+
+  async disconnect(userId: string): Promise<void> {
+    try {
+      const candidate = await this.candidateModel.findByIdAndUpdate(
+        userId,
+        { $set: { lastLoginAt: new Date() } },
+        { new: true }
+      );
+      
+      if (!candidate) {
+        throw new HttpException('Candidat non trouvé', HttpStatus.NOT_FOUND);
+      }
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
   }
 }

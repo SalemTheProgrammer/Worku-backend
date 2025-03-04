@@ -160,4 +160,22 @@ export class CompanyController {
       message: "Profil de l'entreprise mis à jour avec succès",
     };
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('disconnect')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Déconnecter l'entreprise" })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Déconnexion réussie',
+  })
+  async disconnect(@Request() req: { user: TokenPayload }): Promise<{ message: string }> {
+    if (!req.user.companyId) {
+      throw new HttpException('Company ID not found', HttpStatus.BAD_REQUEST);
+    }
+    await this.companyService.disconnect(req.user.companyId);
+    return {
+      message: 'Déconnexion réussie',
+    };
+  }
 }

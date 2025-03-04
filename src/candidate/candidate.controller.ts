@@ -1,11 +1,10 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards, Request, HttpStatus, HttpException, Res } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, UseGuards, Request, HttpStatus, HttpException, Res } from '@nestjs/common';
 import { ApiTags, ApiCreatedResponse, ApiOkResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CandidateService } from './candidate.service';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { VerifyCandidateOtpDto } from './dto/verify-candidate-otp.dto';
 import { LoginCandidateDto } from './dto/login-candidate.dto';
-import { VerifyLoginCandidateOtpDto } from './dto/verify-login-candidate-otp.dto';
 import { UpdateCandidateProfileDto } from './dto/update-candidate-profile.dto';
 import { Response } from 'express';
 
@@ -36,21 +35,23 @@ export class CandidateController {
   }
 
   @Post('login')
-  @ApiOkResponse({ description: 'Candidate login initiated successfully.' })
+  @ApiOkResponse({ description: 'Candidate logged in successfully.' })
   async login(@Body() loginCandidateDto: LoginCandidateDto) {
     try {
-      await this.candidateService.login(loginCandidateDto);
-      return { message: 'Connexion initiée. Veuillez vérifier le code OTP.' };
+      return await this.candidateService.login(loginCandidateDto);
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
   }
 
-  @Post('verify-login-otp')
-  @ApiOkResponse({ description: 'Candidate logged in successfully.' })
-  async verifyLoginOtp(@Body() verifyLoginCandidateOtpDto: VerifyLoginCandidateOtpDto) {
+  @UseGuards(JwtAuthGuard)
+  @Delete('disconnect')
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Candidate disconnected successfully.' })
+  async disconnect(@Request() req) {
     try {
-      return await this.candidateService.verifyLoginOtp(verifyLoginCandidateOtpDto);
+      await this.candidateService.disconnect(req.user.userId);
+      return { message: 'Déconnexion réussie' };
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }

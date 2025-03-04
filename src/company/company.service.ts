@@ -145,4 +145,14 @@ export class CompanyService {
     const company = await this.companyModel.findOne({ email });
     return company || undefined;
   }
+
+  async disconnect(companyId: string): Promise<void> {
+    const company = await this.companyModel.findById(companyId);
+    if (!company) {
+      throw new BadRequestException('Entreprise non trouvée');
+    }
+
+    company.lastLoginAt = new Date();
+    await company.save();
+  }
 }

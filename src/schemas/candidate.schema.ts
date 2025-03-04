@@ -47,6 +47,9 @@ export class Candidate extends Document {
 
   @Prop({ default: false })
   profileCompleted: boolean;
+
+  @Prop()
+  lastLoginAt?: Date;
 }
 
 export const CandidateSchema = SchemaFactory.createForClass(Candidate);
