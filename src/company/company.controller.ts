@@ -25,7 +25,7 @@ import { CompleteCompanyProfileDto } from './dto/complete-profile.dto';
 import { TokenPayload } from '../interfaces/user.interface';
 
 @ApiTags('company')
-@Controller('company')
+@Controller('auth/company')
 export class CompanyController {
   constructor(
     private readonly companyService: CompanyService,

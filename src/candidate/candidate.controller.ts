@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Delete, Body, UseGuards, Request, HttpStatus, HttpException, Res } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, UseGuards, Request, HttpStatus, HttpException } from '@nestjs/common';
 import { ApiTags, ApiCreatedResponse, ApiOkResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CandidateService } from './candidate.service';
@@ -6,9 +6,8 @@ import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { VerifyCandidateOtpDto } from './dto/verify-candidate-otp.dto';
 import { LoginCandidateDto } from './dto/login-candidate.dto';
 import { UpdateCandidateProfileDto } from './dto/update-candidate-profile.dto';
-import { Response } from 'express';
 
-@Controller('candidate')
+@Controller('auth/candidate')
 @ApiTags('Candidate')
 export class CandidateController {
   constructor(private readonly candidateService: CandidateService) {}
@@ -20,7 +19,7 @@ export class CandidateController {
       await this.candidateService.register(registerCandidateDto);
       return { message: 'Inscription réussie. Veuillez vérifier le code OTP.' };
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -30,7 +29,7 @@ export class CandidateController {
     try {
       return await this.candidateService.verifyOtp(verifyCandidateOtpDto);
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -40,7 +39,7 @@ export class CandidateController {
     try {
       return await this.candidateService.login(loginCandidateDto);
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      throw new HttpException(error.message, error.status || HttpStatus.UNAUTHORIZED);
     }
   }
 
@@ -53,7 +52,7 @@ export class CandidateController {
       await this.candidateService.disconnect(req.user.userId);
       return { message: 'Déconnexion réussie' };
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -62,7 +61,11 @@ export class CandidateController {
   @ApiBearerAuth()
   @ApiOkResponse({ description: 'Token refreshed successfully.' })
   async refreshToken(@Request() req) {
-    return this.candidateService.refreshToken(req.user);
+    try {
+      return await this.candidateService.refreshToken(req.user);
+    } catch (error) {
+      throw new HttpException(error.message, error.status || HttpStatus.UNAUTHORIZED);
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -70,7 +73,11 @@ export class CandidateController {
   @ApiBearerAuth()
   @ApiOkResponse({ description: 'Candidate profile retrieved successfully.' })
   async getProfile(@Request() req) {
-    return this.candidateService.getProfile(req.user.userId);
+    try {
+      return await this.candidateService.getProfile(req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message, error.status || HttpStatus.NOT_FOUND);
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -81,71 +88,7 @@ export class CandidateController {
     try {
       return await this.candidateService.updateProfile(req.user.userId, updateCandidateProfileDto);
     } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @Get('linkedin/login')
-  @ApiOkResponse({ description: 'Démarrer la connexion LinkedIn.' })
-  async linkedinLogin(@Res() res: Response) {
-    try {
-      return await this.candidateService.linkedinLogin(res);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @Get('linkedin/callback')
-  @ApiOkResponse({ description: 'Retour de connexion LinkedIn.' })
-  async linkedinCallback(@Request() req: any, @Res() res: Response) {
-    try {
-      return await this.candidateService.linkedinCallback(req, res);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @Get('github/login')
-  @ApiOkResponse({ description: 'Démarrer la connexion GitHub.' })
-  async githubLogin(@Res() res: Response) {
-    try {
-      return await this.candidateService.githubLogin(res);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @Get('github/callback')
-  @ApiOkResponse({ description: 'Retour de connexion GitHub.' })
-  async githubCallback(@Request() req: any, @Res() res: Response) {
-    try {
-      return await this.candidateService.githubCallback(req, res);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Put('link-linkedin')
-  @ApiBearerAuth()
-  @ApiOkResponse({ description: 'Profil LinkedIn lié avec succès.' })
-  async linkLinkedIn(@Request() req, @Body('linkedinUrl') linkedinUrl: string) {
-    try {
-      return await this.candidateService.linkLinkedIn(req.user.userId, linkedinUrl);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Put('link-github')
-  @ApiBearerAuth()
-  @ApiOkResponse({ description: 'Profil GitHub lié avec succès.' })
-  async linkGitHub(@Request() req, @Body('githubUrl') githubUrl: string) {
-    try {
-      return await this.candidateService.linkGitHub(req.user.userId, githubUrl);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
     }
   }
 }

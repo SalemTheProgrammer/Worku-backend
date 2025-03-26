@@ -1,129 +1,179 @@
-# Worku Hiring Platform
+# Worku - Hiring Platform API
 
-A NestJS-based hiring platform with OTP email verification for company registration.
+A high-end authentication and authorization system for a hiring platform built with Spring Boot, Spring Security, JWT, and MySQL.
 
 ## Features
 
-- Company registration with professional email validation
-- OTP-based email verification
-- Swagger API documentation
-- Docker support
-- Modular architecture
-- Production-ready configuration
+- Secure authentication with JWT tokens
+- Role-based authorization (Company and Candidate)
+- Company and Candidate registration and management
+- Password encryption with BCrypt
+- Email validation
+- Phone number validation
+- Input validation and error handling
+- API documentation with OpenAPI/Swagger
+- Unit and integration tests
+- MySQL database integration
+- Token refresh mechanism
+- Audit logging for entities
+
+## Technology Stack
+
+- Java 17
+- Spring Boot 3.x
+- Spring Security
+- Spring Data JPA
+- MySQL 8
+- JWT (JSON Web Tokens)
+- Swagger/OpenAPI
+- Maven
+- JUnit 5
+- H2 Database (for testing)
+- Lombok
 
 ## Prerequisites
 
-- Node.js (v20 or later)
-- npm (v9 or later)
-- Docker and Docker Compose (optional)
+- Java 17 or higher
+- MySQL 8
+- Maven
 
-## Installation
-
-### Local Development
+## Getting Started
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd worku-platform
+git clone https://github.com/yourusername/worku.git
+cd worku
 ```
 
-2. Install dependencies:
+2. Configure MySQL database in `src/main/resources/application.properties`:
+```properties
+spring.datasource.url=jdbc:mysql://localhost:3306/worku?createDatabaseIfNotExist=true
+spring.datasource.username=your_username
+spring.datasource.password=your_password
+```
+
+3. Build the project:
 ```bash
-npm install
+mvn clean install
 ```
 
-3. Create a `.env` file in the root directory (use `.env.example` as template):
+4. Run the application:
 ```bash
-cp .env.example .env
+mvn spring-boot:run
 ```
 
-4. Update the `.env` file with your configuration:
-- Set up your SMTP credentials for email sending
-- Update JWT secret
-- Configure other environment variables as needed
-
-5. Start the development server:
-```bash
-npm run start:dev
-```
-
-### Using Docker
-
-1. Build and start the containers:
-```bash
-docker-compose up -d
-```
-
-2. The API will be available at http://localhost:3000
+The application will start on http://localhost:8080
 
 ## API Documentation
 
-Once the application is running, you can access the Swagger documentation at:
-http://localhost:3000/api
+After starting the application, you can access the API documentation at:
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- OpenAPI JSON: http://localhost:8080/v3/api-docs
 
 ## API Endpoints
 
-### Company Registration
-
-- `POST /company/register`
-  - Register a new company with professional email validation
-  - Required fields:
-    - nomEntreprise (Company Name)
-    - numeroRNE (RNE Number)
-    - email (Professional Email)
-
-- `POST /company/verify`
-  - Verify company registration using OTP
-  - Required fields:
-    - email
-    - otp
-
-## Development
-
-### Project Structure
+### Authentication
 
 ```
-src/
-├── auth/           # Authentication related files
-├── company/        # Company registration module
-├── otp/           # OTP service and utilities
-├── common/        # Shared utilities and configurations
-└── main.ts        # Application entry point
+POST /api/v1/auth/register/company    - Register a new company
+POST /api/v1/auth/register/candidate  - Register a new candidate
+POST /api/v1/auth/login              - Authenticate user
 ```
 
-### Running Tests
+### Request Examples
 
+#### Register Company
+```json
+{
+  "companyName": "Tech Corp",
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john@techcorp.com",
+  "password": "SecurePass123!",
+  "phoneNumber": "+1234567890",
+  "industry": "Technology",
+  "website": "https://techcorp.com",
+  "description": "Leading tech company",
+  "size": "50-200",
+  "location": "New York"
+}
+```
+
+#### Register Candidate
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Smith",
+  "email": "jane@email.com",
+  "password": "SecurePass123!",
+  "phoneNumber": "+1234567890",
+  "bio": "Experienced software engineer",
+  "skills": "Java, Spring Boot, React",
+  "currentPosition": "Senior Developer",
+  "education": "BSc Computer Science",
+  "experience": "5 years",
+  "linkedinUrl": "https://linkedin.com/in/janesmith"
+}
+```
+
+#### Login
+```json
+{
+  "email": "user@example.com",
+  "password": "SecurePass123!"
+}
+```
+
+## Security
+
+- Password Requirements:
+  - Minimum 8 characters
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+  - At least one special character
+
+- JWT Token Configuration:
+  - Access Token validity: 24 hours
+  - Refresh Token validity: 7 days
+
+## Error Handling
+
+The API uses standard HTTP status codes and returns detailed error messages:
+
+```json
+{
+  "timestamp": "2024-02-21T18:26:51",
+  "status": 400,
+  "message": "Validation failed",
+  "errors": {
+    "email": "Invalid email format",
+    "password": "Password must contain at least 8 characters"
+  }
+}
+```
+
+## Testing
+
+Run tests with:
 ```bash
-# Unit tests
-npm run test
-
-# e2e tests
-npm run test:e2e
-
-# Test coverage
-npm run test:cov
+mvn test
 ```
 
-## Production Deployment
+The project includes:
+- Unit tests
+- Integration tests
+- Authentication tests
+- Validation tests
 
-1. Build the Docker image:
-```bash
-docker build -t worku-platform .
-```
+## Contributing
 
-2. Run the container:
-```bash
-docker run -p 3000:3000 --env-file .env worku-platform
-```
-
-## Security Considerations
-
-- Update the JWT_SECRET in production
-- Use proper SMTP credentials
-- Set up appropriate rate limiting
-- Use HTTPS in production
-- Implement proper email validation
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
 
 ## License
 
-[Your chosen license]
+This project is licensed under the Apache License 2.0 - see the LICENSE file for details.

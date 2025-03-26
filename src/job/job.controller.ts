@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JobService } from './job.service';
 import { CreateJobDto } from './dto/create-job.dto';
 
-@Controller('job')
+@Controller('auth/job')
 @ApiTags('Job')
 export class JobController {
   constructor(private readonly jobService: JobService) {}

@@ -24,6 +24,21 @@ type Config = {
   security: {
     rateLimitMax: number;
     rateLimitWindowMs: number;
+    helmet: {
+      contentSecurityPolicy: boolean;
+      crossOriginEmbedderPolicy: boolean;
+      crossOriginOpenerPolicy: boolean;
+      crossOriginResourcePolicy: boolean;
+      dnsPrefetchControl: boolean;
+      frameguard: boolean;
+      hidePoweredBy: boolean;
+      hsts: boolean;
+      ieNoOpen: boolean;
+      noSniff: boolean;
+      referrerPolicy: boolean;
+      xssFilter: boolean;
+    };
+    gracefulShutdownTimeout: number;
   };
   mongodb: {
     uri: string;
@@ -35,6 +50,11 @@ type Config = {
   cors: {
     origin: string[];
     credentials: boolean;
+  };
+  logging: {
+    level: string;
+    maxFiles: string;
+    maxSize: string;
   };
 };
 
@@ -64,6 +84,21 @@ export default (): Config => ({
   security: {
     rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
     rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
+    helmet: {
+      contentSecurityPolicy: process.env.HELMET_CSP !== 'false',
+      crossOriginEmbedderPolicy: process.env.HELMET_COEP !== 'false',
+      crossOriginOpenerPolicy: process.env.HELMET_COOP !== 'false',
+      crossOriginResourcePolicy: process.env.HELMET_CORP !== 'false',
+      dnsPrefetchControl: process.env.HELMET_DNS_PREFETCH !== 'false',
+      frameguard: process.env.HELMET_FRAMEGUARD !== 'false',
+      hidePoweredBy: true,
+      hsts: process.env.HELMET_HSTS !== 'false',
+      ieNoOpen: process.env.HELMET_IE_NO_OPEN !== 'false',
+      noSniff: process.env.HELMET_NO_SNIFF !== 'false',
+      referrerPolicy: process.env.HELMET_REFERRER_POLICY !== 'false',
+      xssFilter: process.env.HELMET_XSS_FILTER !== 'false',
+    },
+    gracefulShutdownTimeout: parseInt(process.env.GRACEFUL_SHUTDOWN_TIMEOUT || '10000', 10),
   },
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/lintern',
@@ -75,5 +110,10 @@ export default (): Config => ({
   cors: {
     origin: (process.env.CORS_ORIGINS || 'http://localhost:4200').split(','),
     credentials: process.env.CORS_CREDENTIALS === 'true',
+  },
+  logging: {
+    level: process.env.LOG_LEVEL || 'info',
+    maxFiles: process.env.LOG_MAX_FILES || '30d',
+    maxSize: process.env.LOG_MAX_SIZE || '20m',
   },
 });

@@ -7,6 +7,7 @@ import { JwtStrategy, JwtRefreshStrategy } from './strategies/jwt.strategy';
 import { OtpModule } from '../otp/otp.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Company, CompanySchema } from '../schemas/company.schema';
+import { AuthController } from './auth.controller';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { Company, CompanySchema } from '../schemas/company.schema';
       }),
     }),
   ],
+  controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy],
   exports: [AuthService],
 })
