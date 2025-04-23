@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { TokenPayload, Tokens } from '../interfaces/user.interface';
@@ -17,40 +17,109 @@ export class AuthService {
   ) {}
 
   async initiateLogin(email: string): Promise<void> {
-    // Check if company exists first
-    const company = await this.companyModel.findOne({ email });
-    if (!company) {
-      throw new BadRequestException('Cette entreprise n\'existe pas');
+    try {
+      // Check database connection first
+      try {
+        await this.companyModel.findOne().limit(1);
+        console.log('Database connection successful');
+      } catch (error) {
+        console.error('Database connection error:', error);
+        throw new InternalServerErrorException('Erreur de connexion à la base de données');
+      }
+
+      // Normalize email
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log('Initiating login for email:', normalizedEmail);
+
+      // Find company with case-insensitive email match
+      const company = await this.companyModel.findOne({
+        email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') }
+      });
+      
+      console.log('Company lookup result:', company ? 'Found' : 'Not found');
+
+      if (!company) {
+        throw new BadRequestException('Cette entreprise n\'existe pas');
+      }
+
+      if (!company.verified) {
+        throw new BadRequestException('Cette entreprise n\'est pas encore vérifiée');
+      }
+
+      // Send OTP
+      await this.otpService.sendOtp(normalizedEmail);
+      console.log('OTP sent successfully');
+
+    } catch (error) {
+      console.error('Login initiation error:', error);
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Erreur lors de l\'initiation de la connexion');
     }
-
-    // Generate OTP for existing company
-    await this.otpService.generateOtp(email, {});
   }
 
-  async verifyLoginOtp(email: string, otp: string): Promise<boolean> {
-    return this.otpService.verifyOtp(email, otp, false); // false for login verification
+  async verifyLoginOtp(email: string, otp: string): Promise<void> {
+    try {
+      console.log('Verifying OTP for email:', email);
+      await this.otpService.verifyOtp(email, otp);
+      console.log('OTP verification successful');
+    } catch (error) {
+      console.error('OTP verification error:', error);
+      throw new UnauthorizedException('Code OTP invalide ou expiré');
+    }
   }
+
 
   async generateTokens(payload: TokenPayload): Promise<Tokens> {
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get('jwt.secret'),
-        expiresIn: this.configService.get('jwt.expiresIn'),
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get('jwt.refreshSecret'),
-        expiresIn: this.configService.get('jwt.refreshExpiresIn'),
-      }),
-    ]);
+    try {
+      console.log('Generating tokens for user:', payload.email);
+      
+      const [accessToken, refreshToken] = await Promise.all([
+        this.jwtService.signAsync(
+          payload,
+          {
+            secret: this.configService.get('jwt.secret'),
+            expiresIn: this.configService.get('jwt.expiresIn'),
+          }
+        ),
+        this.jwtService.signAsync(
+          payload,
+          {
+            secret: this.configService.get('jwt.refreshSecret'),
+            expiresIn: this.configService.get('jwt.refreshExpiresIn'),
+          }
+        ),
+      ]);
 
-    return { accessToken, refreshToken };
+      console.log('Tokens generated successfully');
+      return { accessToken, refreshToken };
+    } catch (error) {
+      console.error('Token generation error:', error);
+      throw new InternalServerErrorException('Erreur lors de la génération des tokens');
+    }
   }
 
   async refreshTokens(refreshToken: string): Promise<Tokens> {
     try {
-      const payload = await this.jwtService.verifyAsync<TokenPayload>(refreshToken, {
-        secret: this.configService.get('jwt.refreshSecret'),
+      console.log('Attempting to refresh tokens');
+      
+      const payload = await this.jwtService.verifyAsync<TokenPayload>(
+        refreshToken,
+        {
+          secret: this.configService.get('jwt.refreshSecret'),
+        }
+      );
+
+      // Verify company still exists and is verified
+      const company = await this.companyModel.findOne({
+        email: payload.email,
+        verified: true
       });
+
+      if (!company) {
+        throw new UnauthorizedException('Entreprise non trouvée ou non vérifiée');
+      }
 
       return this.generateTokens({
         userId: payload.userId,
@@ -58,26 +127,33 @@ export class AuthService {
         role: payload.role,
         companyId: payload.companyId,
       });
-    } catch {
+    } catch (error) {
+      console.error('Token refresh error:', error);
       throw new UnauthorizedException('Token de rafraîchissement invalide');
     }
   }
 
   async verifyToken(token: string): Promise<TokenPayload> {
     try {
-      return await this.jwtService.verifyAsync(token, {
+      console.log('Verifying token');
+      const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get('jwt.secret'),
       });
-    } catch {
+      console.log('Token verified successfully');
+      return payload;
+    } catch (error) {
+      console.error('Token verification error:', error);
       throw new UnauthorizedException('Token invalide');
     }
   }
 
   private generateSessionMetadata() {
-    return {
+    const metadata = {
       lastLoginAt: new Date(),
-      userAgent: 'web', // Extend this to capture the actual user agent if needed
-      ipAddress: '0.0.0.0', // Extend this to capture the actual IP address if needed
+      userAgent: 'web',
+      ipAddress: '0.0.0.0',
     };
+    console.log('Generated session metadata:', metadata);
+    return metadata;
   }
 }

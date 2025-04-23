@@ -22,11 +22,27 @@ import { HealthController } from './common/controllers/health.controller';
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('mongodb.uri'),
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const uri = configService.get<string>('mongodb.uri');
+        console.log('Connecting to MongoDB with URI:', uri);
+        return {
+          uri,
+          useNewUrlParser: true,
+          useUnifiedTopology: true,
+          connectionFactory: (connection) => {
+            connection.on('connected', () => {
+              console.log('MongoDB connected successfully');
+            });
+            connection.on('error', (error) => {
+              console.error('MongoDB connection error:', error);
+            });
+            connection.on('disconnected', () => {
+              console.log('MongoDB disconnected');
+            });
+            return connection;
+          }
+        };
+      },
       inject: [ConfigService],
     }),
     CompanyModule,

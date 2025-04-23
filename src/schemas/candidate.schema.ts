@@ -1,62 +1,13 @@
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose'; // Import Types
+import { ProfessionalStatus } from '../job/enums/professional-status.enum';
+import { EmploymentStatus } from '../candidate/enums/employment-status.enum';
+import { Education, EducationSchema } from './education.schema';
+import { Experience, ExperienceSchema } from './experience.schema';
+import { Certification, CertificationSchema } from './certification.schema';
+import { Skill, SkillSchema } from './skill.schema';
 
-@Schema()
-export class Education {
-  @Prop({ required: true })
-  institution: string;
-
-  @Prop({ required: true })
-  degree: string;
-
-  @Prop({ required: true })
-  fieldOfStudy: string;
-
-  @Prop()
-  startDate: Date;
-
-  @Prop()
-  endDate?: Date;
-
-  @Prop()
-  description?: string;
-}
-
-@Schema()
-export class Experience {
-  @Prop({ required: true })
-  company: string;
-
-  @Prop({ required: true })
-  position: string;
-
-  @Prop()
-  location?: string;
-
-  @Prop()
-  startDate: Date;
-
-  @Prop()
-  endDate?: Date;
-
-  @Prop()
-  description?: string;
-
-  @Prop([String])
-  technologies?: string[];
-}
-
-@Schema()
-export class Skill {
-  @Prop({ required: true })
-  name: string;
-
-  @Prop({ required: true, min: 1, max: 5 })
-  level: number;
-
-  @Prop()
-  yearsOfExperience?: number;
-}
+export type CandidateDocument = Candidate & Document; // Export CandidateDocument
 
 @Schema()
 export class Candidate extends Document {
@@ -77,10 +28,31 @@ export class Candidate extends Document {
   profilePicture?: string;
 
   @Prop()
+  cvUrl?: string;
+
+  @Prop()
+  cvImageUrl?: string; // Added for storing CV images for analysis
+
+  @Prop()
+  resumeUrl?: string;
+
+  @Prop()
   dateOfBirth?: Date;
 
   @Prop()
   phone?: string;
+
+  @Prop({ required: true, type: String, enum: ProfessionalStatus })
+  professionalStatus: ProfessionalStatus;
+
+  @Prop({ type: Date })
+  availabilityDate?: Date;
+
+  @Prop({ type: String, enum: EmploymentStatus })
+  employmentStatus?: EmploymentStatus;
+
+  @Prop({ type: Boolean, default: false })
+  remoteWork?: boolean;
 
   // Professional Information
   @Prop()
@@ -124,33 +96,30 @@ export class Candidate extends Document {
   country?: string;
 
   // Social & Portfolio Links
-  @Prop()
-  linkedinUrl?: string;
+  @Prop({ type: String, default: null })
+  linkedinUrl: string | null;
 
-  @Prop()
-  githubUrl?: string;
+  @Prop({ type: String, default: null })
+  githubUrl: string | null;
 
-  @Prop()
-  portfolioUrl?: string;
+  @Prop({ type: String, default: null })
+  portfolioUrl: string | null;
 
-  @Prop([String])
-  otherLinks?: string[];
+  @Prop({ type: [String], default: [] })
+  otherLinks: string[];
 
   // Education & Experience
-  @Prop([Education])
-  education?: Education[];
+  @Prop({ type: [EducationSchema], default: [] })
+  education: Education[];
 
-  @Prop([Experience])
-  experience?: Experience[];
+  @Prop({ type: [ExperienceSchema], default: [] })
+  experience: Experience[];
 
-  @Prop([Skill])
-  skills?: Skill[];
+  @Prop({ type: [SkillSchema], default: [] })
+  skills: Skill[];
 
-  @Prop([String])
-  certifications?: string[];
-
-  @Prop([String])
-  languages?: string[];
+  @Prop({ type: [CertificationSchema], default: [] })
+  certifications: Certification[];
 
   // Privacy Settings
   @Prop({ type: Boolean, default: true })
@@ -161,6 +130,37 @@ export class Candidate extends Document {
 
   @Prop({ type: [String], default: [] })
   hiddenFields?: string[];
+
+  // Profile Completion Tracking
+  @Prop({ type: Number, default: 0, min: 0, max: 100 })
+  profileCompletionScore: number;
+
+  @Prop({
+    type: {
+      personalInfo: { type: Boolean, default: false },
+      cv: { type: Boolean, default: false },
+      education: { type: Boolean, default: false },
+      experience: { type: Boolean, default: false },
+      certifications: { type: Boolean, default: false },
+      links: { type: Boolean, default: false }
+    },
+    default: {
+      personalInfo: false,
+      cv: false,
+      education: false,
+      experience: false,
+      certifications: false,
+      links: false
+    }
+  })
+  fieldsCompleted: {
+    personalInfo: boolean;
+    cv: boolean;
+    education: boolean;
+    experience: boolean;
+    certifications: boolean;
+    links: boolean;
+  };
 
   // System Fields
   @Prop({ default: false })

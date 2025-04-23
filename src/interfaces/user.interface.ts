@@ -3,6 +3,7 @@ export enum UserRole {
   MANAGER = 'manager',
   RECRUITER = 'recruiter',
   CANDIDATE = 'candidate',
+  USER = 'user',
 }
 
 export interface User {
@@ -18,6 +19,15 @@ export interface User {
   lastSignIn?: Date;
   createdAt: Date;
   updatedAt: Date;
+  profileCompletionScore: number;
+  fieldsCompleted: {
+    personalInfo: boolean;
+    cv: boolean;
+    education: boolean;
+    experience: boolean;
+    certifications: boolean;
+    links: boolean;
+  };
 }
 
 export interface TokenPayload {

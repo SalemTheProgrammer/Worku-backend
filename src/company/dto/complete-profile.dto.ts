@@ -42,6 +42,16 @@ export class SocialMediaLinksDto {
 
 export class CompleteCompanyProfileDto {
   @ApiProperty({
+    description: 'Nom d\'utilisateur personnalisé',
+    example: 'Salem Dahmani',
+    required: false,
+    nullable: true
+  })
+  @IsOptional()
+  @IsString({ message: 'Le nom d\'utilisateur doit être une chaîne de caractères' })
+  readonly nomDeUtilisateur?: string | null;
+
+  @ApiProperty({
     description: 'Secteur d\'activité de l\'entreprise',
     enum: BusinessSector,
     example: BusinessSector.TECHNOLOGY

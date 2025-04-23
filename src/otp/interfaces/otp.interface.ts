@@ -1,15 +1,8 @@
-export interface OtpData {
-  code: string;
+import { Document } from 'mongoose';
+
+export interface Otp extends Document {
+  email: string;
+  otp: string;
   expiresAt: Date;
   verified: boolean;
-}
-
-export interface IOtpService {
-  generateOtp(email: string, company: any): Promise<string>;
-  verifyOtp(email: string, otp: string): Promise<boolean>;
-  sendOtpEmail(email: string, otp: string): Promise<void>;
-}
-
-export interface OtpStorage {
-  [email: string]: OtpData;
 }

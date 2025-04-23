@@ -2,6 +2,17 @@ import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 import { BusinessSector } from '../interfaces/company.interface';
 
+class InvitedUser {
+  @Prop({ type: String, required: true })
+  email: string;
+
+  @Prop({ type: String, required: true })
+  nomDeUtilisateur: string;
+
+  @Prop({ type: Boolean, default: false })
+  isAccepted: boolean;
+}
+
 @Schema({ timestamps: true })
 export class Company extends Document {
   @Prop({ type: String, required: true })
@@ -13,11 +24,11 @@ export class Company extends Document {
   @Prop({ type: String, required: true, unique: true })
   email: string;
 
-  @Prop({ type: String, enum: BusinessSector, default: BusinessSector.OTHER })
-  secteurActivite: BusinessSector;
+  @Prop({ type: [String] })
+  secteurActivite: string[];
 
-  @Prop({ type: Number, default: 0, min: 0, max: 100 })
-  tailleEntreprise: number;
+  @Prop({ type: String })
+  tailleEntreprise: string;
 
   @Prop({ type: String, required: false })
   phone: string;
@@ -25,20 +36,22 @@ export class Company extends Document {
   @Prop({ type: String, default: '' })
   adresse: string;
 
-  @Prop({ type: String })
-  siteWeb: string;
+  @Prop({ type: String, default: null })
+  siteWeb: string | null;
 
   @Prop({
     type: {
-      linkedin: { type: String },
-      twitter: { type: String },
-      facebook: { type: String }
+      linkedin: { type: String, default: null },
+      instagram: { type: String, default: null },
+      facebook: { type: String, default: null },
+      x: { type: String, default: null }
     }
   })
   reseauxSociaux: {
-    linkedin?: string;
-    twitter?: string;
-    facebook?: string;
+    linkedin?: string | null;
+    instagram?: string | null;
+    facebook?: string | null;
+    x?: string | null;
   };
 
   @Prop({ type: String })
@@ -46,6 +59,9 @@ export class Company extends Document {
 
   @Prop({ type: [String] })
   activiteCles: string[];
+
+  @Prop({ type: String, default: null })
+  logo: string | null;
 
   @Prop({ type: Boolean, default: false })
   profileCompleted: boolean;
@@ -68,6 +84,9 @@ export class Company extends Document {
     offresExpirees: boolean;
     candidatsRecommandes: boolean;
   };
+
+  @Prop({ type: [{ type: Object }] })
+  invitedUsers: InvitedUser[];
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);

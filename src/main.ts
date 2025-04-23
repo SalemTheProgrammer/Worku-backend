@@ -1,20 +1,42 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { ValidationPipe, HttpStatus } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import helmet from 'helmet';
+import helmet, { crossOriginResourcePolicy } from 'helmet';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import logger from './common/utils/logger';
 
 async function bootstrap() {
   try {
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create<NestExpressApplication>(AppModule);
     const configService = app.get(ConfigService);
 
+    // Initialize FileUtils with ConfigService
+    await import('./common/utils/file.utils').then(({ FileUtils }) => {
+      FileUtils.init(configService);
+    });
+
+    // Serve static files
+    app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+      prefix: '/uploads',
+      setHeaders: (res) => {
+        // Allow CORS for static files
+        res.set('Access-Control-Allow-Origin', configService.get('cors.origin'));
+        res.set('Access-Control-Allow-Methods', 'GET');
+        res.set('Access-Control-Allow-Headers', 'Range');
+        res.set('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Range, Content-Length');
+        res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+      }
+    });
+
     // Security middleware
-    app.use(helmet());
+    app.use(helmet({
+      crossOriginResourcePolicy: true
+    }));
 
     // CORS configuration
     app.enableCors({
@@ -27,12 +49,12 @@ async function bootstrap() {
     });
 
     // Global pipes, interceptors, and filters
-    app.useGlobalPipes(new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-      errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-    }));
+    app.useGlobalPipes(
+      new ValidationPipe({
+        transform: true,
+        transformOptions: { enableImplicitConversion: true },
+      }),
+    );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
 
@@ -51,7 +73,8 @@ async function bootstrap() {
       .addTag('company', 'Company profile and management')
       .addTag('candidate', 'Candidate profile and management')
       .addTag('job', 'Job posting and application')
-      .addTag('otp', 'OTP verification and management')
+      .addTag('Profile Picture', 'Candidate profile picture management')
+      .addTag('CV', 'Candidate CV management')
       .addBearerAuth()
       .build();
 

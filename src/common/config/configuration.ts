@@ -56,6 +56,9 @@ type Config = {
     maxFiles: string;
     maxSize: string;
   };
+  gemini: {
+    apiKey: string;
+  };
 };
 
 export default (): Config => ({
@@ -115,5 +118,8 @@ export default (): Config => ({
     level: process.env.LOG_LEVEL || 'info',
     maxFiles: process.env.LOG_MAX_FILES || '30d',
     maxSize: process.env.LOG_MAX_SIZE || '20m',
+  },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
   },
 });
