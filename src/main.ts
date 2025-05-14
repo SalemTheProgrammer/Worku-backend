@@ -2,18 +2,41 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { AppModule } from './app.module';
-import { ValidationPipe, HttpStatus } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import helmet, { crossOriginResourcePolicy } from 'helmet';
+import helmet from 'helmet';
+import * as compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import logger from './common/utils/logger';
 
+// Set default NODE_ENV if not set
+process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+
 async function bootstrap() {
   try {
-    const app = await NestFactory.create<NestExpressApplication>(AppModule);
+    const nodeEnv = process.env.NODE_ENV;
+    console.log(`Starting application in ${nodeEnv} mode`);
+    // Create the app with logging configuration
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+      logger: ['error', 'warn', nodeEnv === 'production' ? 'log' : 'debug', 'verbose']
+    });
     const configService = app.get(ConfigService);
+
+    // CORS must be enabled before any other middleware
+    const corsOrigins = ['http://localhost:4200'];
+    app.enableCors({
+      origin: corsOrigins,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+      allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
+      credentials: true,
+      optionsSuccessStatus: 204,
+    });
+
+    // Enable compression
+    app.use(compression());
 
     // Initialize FileUtils with ConfigService
     await import('./common/utils/file.utils').then(({ FileUtils }) => {
@@ -25,28 +48,43 @@ async function bootstrap() {
       prefix: '/uploads',
       setHeaders: (res) => {
         // Allow CORS for static files
-        res.set('Access-Control-Allow-Origin', configService.get('cors.origin'));
-        res.set('Access-Control-Allow-Methods', 'GET');
-        res.set('Access-Control-Allow-Headers', 'Range');
+        const origin = process.env.NODE_ENV === 'production'
+          ? configService.get('CORS_ORIGIN', 'https://your-frontend-domain.com')
+          : 'http://localhost:4200';
+        
+        res.set('Access-Control-Allow-Origin', origin);
+        res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Range, Authorization');
+        res.set('Access-Control-Allow-Credentials', 'true');
         res.set('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Range, Content-Length');
         res.set('Cross-Origin-Resource-Policy', 'cross-origin');
       }
     });
 
-    // Security middleware
-    app.use(helmet({
-      crossOriginResourcePolicy: true
+    // Security middleware configuration
+    app.use(
+      helmet({
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+        contentSecurityPolicy: false,
+        xssFilter: true,
+        hidePoweredBy: true,
+        ieNoOpen: true,
+        noSniff: true,
+        frameguard: {
+          action: 'deny'
+        }
+      })
+    );
+
+    // Rate limiting
+    app.use(rateLimit({
+      windowMs: configService.get('RATE_LIMIT_WINDOW_MS', 900000), // 15 minutes
+      max: configService.get('RATE_LIMIT_MAX_REQUESTS', 100), // limit each IP to 100 requests per windowMs
+      message: 'Too many requests from this IP, please try again later'
     }));
 
     // CORS configuration
-    app.enableCors({
-      origin: configService.get('cors.origin'),
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-      credentials: configService.get('cors.credentials'),
-      allowedHeaders: 'Content-Type, Accept, Authorization',
-      preflightContinue: false,
-      optionsSuccessStatus: 204
-    });
+    // Security middleware configuration
 
     // Global pipes, interceptors, and filters
     app.useGlobalPipes(
@@ -58,70 +96,78 @@ async function bootstrap() {
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
 
-    // Swagger setup
-    const port = configService.get('port');
-
-    const config = new DocumentBuilder()
-      .setTitle('Worku API')
-      .setDescription('The Worku hiring platform API documentation')
-      .setVersion('1.0')
-      .setContact('Worku Support', 'https://worku.com', 'support@worku.com')
-      .setLicense('MIT', 'https://opensource.org/licenses/MIT')
-      .addServer('http://localhost:' + port, 'Local Development')
-      .addServer('https://api.worku.com', 'Production')
-      .addTag('authentication', 'Authentication and authorization endpoints')
-      .addTag('company', 'Company profile and management')
-      .addTag('candidate', 'Candidate profile and management')
-      .addTag('job', 'Job posting and application')
-      .addTag('Profile Picture', 'Candidate profile picture management')
-      .addTag('CV', 'Candidate CV management')
-      .addBearerAuth()
-      .build();
-
-    const document = SwaggerModule.createDocument(app, config);
+    // Get port number with type safety
+    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
     
-    // Setup Swagger UI at /api
-    SwaggerModule.setup('api', app, document);
-    
-    // Setup route for raw Swagger JSON
-    SwaggerModule.setup('api-json', app, document, {
-      jsonDocumentUrl: 'api-json',
-      useGlobalPrefix: false
-    });
+    // Swagger setup - only in non-production
+    if (process.env.NODE_ENV !== 'production' || configService.get<boolean>('ENABLE_SWAGGER', false)) {
+      const config = new DocumentBuilder()
+        .setTitle('Worku API')
+        .setDescription('The Worku hiring platform API documentation')
+        .setVersion('1.0')
+        .setContact('Worku Support', 'https://worku.com', 'support@worku.com')
+        .setLicense('MIT', 'https://opensource.org/licenses/MIT')
+        .addServer('http://localhost:' + port, 'Local Development')
+        .addServer('https://api.worku.com', 'Production')
+        .addTag('authentication', 'Authentication and authorization endpoints')
+        .addTag('company', 'Company profile and management')
+        .addTag('candidate', 'Candidate profile and management')
+        .addTag('applications', 'Job applications and analysis')
+        .addTag('job', 'Job posting and application')
+        .addTag('Profile Picture', 'Candidate profile picture management')
+        .addTag('CV', 'Candidate CV management')
+        .addBearerAuth()
+        .build();
+
+      const document = SwaggerModule.createDocument(app, config);
+      
+      // Setup Swagger UI at /api
+      SwaggerModule.setup('api', app, document);
+      
+      // Setup route for raw Swagger JSON
+      SwaggerModule.setup('api-json', app, document, {
+        jsonDocumentUrl: 'api-json',
+        useGlobalPrefix: false
+      });
+    }
     const server = await app.listen(port);
-    logger.info(`Application is running on: http://localhost:${port}`);
+    logger.info(`Application is running on port ${port} in ${nodeEnv} mode`);
 
     // Graceful shutdown
     const signals = ['SIGTERM', 'SIGINT'];
     
-    for (const signal of signals) {
-      process.on(signal, async () => {
+    const shutdownGracefully = async (signal: string) => {
+      try {
         logger.info(`Received ${signal}, starting graceful shutdown...`);
         
-        try {
-          // Close NestJS app
-          await app.close();
-          logger.info('NestJS application closed');
+        // Close NestJS app
+        await app.close();
+        logger.info('NestJS application closed');
 
-          // Close HTTP server
-          server.close(() => {
-            logger.info('HTTP server closed');
-            process.exit(0);
-          });
+        // Close HTTP server
+        server.close(() => {
+          logger.info('HTTP server closed');
+          process.exit(0);
+        });
 
-          // Force close after timeout
-          setTimeout(() => {
-            logger.error('Could not close connections in time, forcefully shutting down');
-            process.exit(1);
-          }, configService.get('security.gracefulShutdownTimeout'));
-        } catch (error) {
-          logger.error('Error during graceful shutdown:', error);
+        // Force close after timeout
+        setTimeout(() => {
+          logger.error('Could not close connections in time, forcefully shutting down');
           process.exit(1);
-        }
-      });
+        }, configService.get<number>('GRACEFUL_SHUTDOWN_TIMEOUT', 10000));
+
+      } catch (error) {
+        logger.error('Error during graceful shutdown:', error);
+        process.exit(1);
+      }
+    };
+
+    for (const signal of signals) {
+      process.on(signal, () => shutdownGracefully(signal));
     }
 
     // Handle unhandled rejections and exceptions
+    // Handle uncaught errors
     process.on('unhandledRejection', (reason) => {
       logger.error('Unhandled Promise Rejection:', reason);
     });
@@ -137,4 +183,7 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Application failed to start:', error);
+  process.exit(1);
+});

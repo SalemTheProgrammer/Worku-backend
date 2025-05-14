@@ -1,95 +1,38 @@
-export enum CompanySize {
-  MICRO = 'micro', // 0-9
-  SMALL = 'small', // 10-49
-  MEDIUM = 'medium', // 50-99
-  LARGE = 'large', // 100+
-}
+import { Document, Types } from 'mongoose';
 
 export enum BusinessSector {
-  TECHNOLOGY = 'technology',
-  FINANCE = 'finance',
-  HEALTHCARE = 'healthcare',
-  EDUCATION = 'education',
-  RETAIL = 'retail',
-  MANUFACTURING = 'manufacturing',
-  SERVICES = 'services',
-  OTHER = 'other',
+  TECHNOLOGY = 'Technology',
+  HEALTHCARE = 'Healthcare',
+  FINANCE = 'Finance',
+  EDUCATION = 'Education',
+  RETAIL = 'Retail',
+  MANUFACTURING = 'Manufacturing',
+  SERVICES = 'Services',
+  OTHER = 'Other'
 }
 
-export interface CompanyRegistration {
+export interface CompanyRef {
+  _id: Types.ObjectId;
   nomEntreprise: string;
   numeroRNE: string;
   email: string;
-  verified: boolean;
-}
-
-export interface CompanyProfile {
-  id: string;
-  // Basic Info
-  nomEntreprise: string;
-  numeroRNE: string;
-  email: string;
-  // Additional Info
-  secteurActivite: BusinessSector;
-  tailleEntreprise: number;
+  secteurActivite: string;
+  tailleEntreprise: string;
+  phone: string;
   adresse: string;
-  siteWeb?: string;
-  reseauxSociaux?: {
-    linkedin?: string;
-    twitter?: string;
-    facebook?: string;
-    instagram?: string;
-  };
-  // Description
-  descriptionEntreprise?: string;
-  activitesClees?: string[];
-  // System fields
-  verified: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  lastLoginAt?: Date;
-  // Settings
-  notificationSettings: {
-    candidaturesRecues: boolean;
-    offresExpirees: boolean;
-    candidatsRecommandes: boolean;
-  };
-}
-
-export interface JobOffer {
-  id: string;
-  companyId: string;
-  title: string;
+  siteWeb: string;
+  reseauxSociaux: Record<string, string>;
   description: string;
-  requirements: string[];
-  location: string;
-  type: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERNSHIP';
-  salary?: {
-    min: number;
-    max: number;
-    currency: string;
-  };
-  status: 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'EXPIRED';
-  createdAt: Date;
-  updatedAt: Date;
-  expiresAt: Date;
-  // Stats
-  views: number;
-  applications: number;
+  activiteCles: string[];
+  logo: string;
+  profileCompleted: boolean;
+  verified: boolean;
+  lastLoginAt: Date;
+  notificationSettings: Record<string, boolean>;
 }
 
-export interface Interview {
-  id: string;
-  jobOfferId: string;
-  candidateId: string;
-  companyId: string;
-  scheduledFor: Date;
-  duration: number; // in minutes
-  type: 'IN_PERSON' | 'PHONE' | 'VIDEO';
-  location?: string;
-  meetingLink?: string;
-  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
-  notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
+export interface Company extends Document, Omit<CompanyRef, '_id'> {
+  _id: Types.ObjectId;
 }
+
+export type LeanCompany = Omit<Company, keyof Document>;

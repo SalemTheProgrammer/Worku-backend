@@ -1,26 +1,71 @@
 version: '3.8'
+
 services:
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb_container
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: worku-api-dev
     ports:
-      - "27017:27017"  # Use the default MongoDB port
+      - "3000:3000"
+      - "9229:9229" # For debugging
     volumes:
-      - mongodb_data:/data/db
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    env_file:
+      - .env
+    command: npm run start:dev
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-    restart: always
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongodb:27017/worku
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - worku-dev-network
+
+  mongodb:
+    image: mongo:6
+    container_name: worku-mongodb-dev
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_dev_data:/data/db
+    networks:
+      - worku-dev-network
 
   redis:
-    image: redis:latest
-    container_name: redis_container
+    image: redis:7-alpine
+    container_name: worku-redis-dev
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy volatile-lru
     ports:
-      - "6379:6379" # Redis default port
+      - "6379:6379"
     volumes:
-      - redis_data:/data
-    restart: always
+      - redis_dev_data:/data
+    networks:
+      - worku-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
-  mongodb_data:
-  redis_data:
+  mongodb_dev_data:
+  redis_dev_data:
+
+networks:
+  worku-dev-network:
+    driver: bridge

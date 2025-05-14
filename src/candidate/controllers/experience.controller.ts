@@ -31,7 +31,8 @@ export class ExperienceController {
     description: 'Returns all experience entries for the candidate.'
   })
   async getExperience(@Request() req) {
-    return await this.experienceService.getExperience(req.user.userId);
+    const experiences = await this.experienceService.getExperience(req.user.userId);
+    return { experiences };
   }
 
   @Get(':id')

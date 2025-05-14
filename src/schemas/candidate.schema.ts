@@ -32,6 +32,9 @@ export class Candidate extends Document {
 
   @Prop()
   cvImageUrl?: string; // Added for storing CV images for analysis
+  @Prop()
+  cvText?: string;
+
 
   @Prop()
   resumeUrl?: string;
@@ -115,7 +118,23 @@ export class Candidate extends Document {
   @Prop({ type: [ExperienceSchema], default: [] })
   experience: Experience[];
 
-  @Prop({ type: [SkillSchema], default: [] })
+  @Prop({
+    type: [
+      {
+        name: { type: String, required: true },
+        category: { type: String, required: true },
+        level: { type: Number, required: true, min: 1, max: 5 },
+        yearsOfExperience: { type: Number },
+        isLanguage: { type: Boolean, default: false },
+        proficiencyLevel: {
+          type: String,
+          enum: ['Natif', 'Professionnel', 'Intermédiaire', 'Débutant'],
+          required: true
+        }
+      }
+    ],
+    default: []
+  })
   skills: Skill[];
 
   @Prop({ type: [CertificationSchema], default: [] })

@@ -1,0 +1,91 @@
+# Job Search & Filter API Documentation
+
+## Base Endpoint
+`GET /jobs/search`
+
+## Filter Parameters (FilterJobsDto)
+
+| Parameter | Type | Required | Description | Allowed Values |
+|-----------|------|----------|-------------|----------------|
+| location | string | No | Job location | Any string |
+| domain | string | No | Industry domain | QHSE, IT, Engineering, etc. |
+| salaryMin | number | No | Minimum salary | >= 0 |
+| salaryMax | number | No | Maximum salary | >= salaryMin |
+| remote | boolean | No | Remote jobs | true/false |
+| contractType | string | No | Employment type | CDI, CDD, SIVP, KARAMA, FREELANCE, STAGE, CIVP, ALTERNANCE, TEMPS_PARTIEL, SOUS_TRAITANCE, CONSULTING |
+| experienceMin | number | No | Min years experience | 0-50 |
+| experienceMax | number | No | Max years experience | experienceMin-50 |
+| educationLevel | string | No | Required education | BAC, BAC_PLUS_2, BAC_PLUS_3, BAC_PLUS_4, BAC_PLUS_5, INGENIEUR, MASTER, DOCTORAT, FORMATION_PROFESSIONNELLE, BTS, BTP, CAP, LICENCE, DUT, AUTRE |
+| languages | string[] | No | Required languages | FRENCH, ARABIC, ENGLISH, GERMAN, ITALIAN, SPANISH |
+| keyword | string | No | Search keywords | Any string |
+| onlyActive | boolean | No | Show active jobs | true/false (default true) |
+| sortBy | string | No | Sort order | newest, salary, experience (default newest) |
+| limit | number | No | Results per page | 1-100 (default 20) |
+| skip | number | No | Pagination offset | >= 0 (default 0) |
+
+## Example Requests
+
+### Using the search endpoint
+```http
+GET /jobs/search?domain=IT&remote=true&salaryMin=3000&languages=FRENCH,ENGLISH&sortBy=salary&limit=10
+```
+
+### Using the list endpoint (alternative)
+```http
+GET /jobs/list?domain=IT&remote=true&salaryMin=3000&languages=FRENCH,ENGLISH&sortBy=salary&limit=10
+```
+
+## Response Structure (JobResponseDto)
+```typescript
+{
+  jobs: [{
+    id: string;
+    title: string;
+    company: string;
+    location: string;
+    salaryRange: { min: number; max: number; currency: string };
+    contractType: string;
+    requiredSkills: string[];
+    postedAt: Date;
+    applicationDeadline: Date;
+    remoteOptions: {
+      isRemote: boolean;
+      hybridDays?: number;
+    };
+    experienceRequired: {
+      years: number;
+      skills: string[];
+    };
+    status: 'ACTIVE' | 'EXPIRED' | 'DRAFT';
+  }];
+  total: number;
+  page: number;
+  limit: number;
+}
+```
+
+## Error Responses
+```json
+// 400 Bad Request (Validation Error)
+{
+  "statusCode": 400,
+  "message": "Validation failed",
+  "errors": [
+    "salaryMax must be greater than salaryMin",
+    "languages must be a valid enum value"
+  ]
+}
+
+// 404 Not Found
+{
+  "statusCode": 404,
+  "message": "No jobs found matching criteria"
+}
+```
+
+## Frontend Implementation Tips
+1. Use dropdowns for enum fields (contractType, educationLevel, languages)
+2. Implement range sliders for salary/experience filters
+3. Cache frequent searches with limit=10 for quick suggestions
+4. Handle pagination using skip/limit parameters
+5. Display active/inactive toggle using onlyActive parameter

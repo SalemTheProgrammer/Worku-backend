@@ -1,16 +1,23 @@
-import { Controller, Post, Get, Body, Query, Param, UseGuards, Request, HttpStatus, HttpException, UnauthorizedException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Post, Get, Delete, Body, Query, Param, UseGuards, Request, HttpStatus, HttpException, UnauthorizedException, Ip, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { Job, JobDocument } from '../schemas/job.schema';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JobService } from './job.service';
 import { CreateJobDto } from './dto/create-job.dto';
 import { FilterJobsDto } from './dto/filter-jobs.dto';
 import { JobListResponseDto, JobResponseDto } from './dto/job-response.dto';
 import { RemainingPostsResponseDto } from './dto/remaining-posts.dto';
+import { CandidateResponseDto } from './dto/candidate-response.dto';
 
 @Controller('jobs')
 @ApiTags('job')
 export class JobController {
-  constructor(private readonly jobService: JobService) {}
+  constructor(
+    private readonly jobService: JobService,
+    @InjectModel(Job.name) private jobModel: Model<JobDocument>
+  ) {}
 
   @Post('create')
   @UseGuards(JwtAuthGuard)
@@ -98,7 +105,39 @@ export class JobController {
   @ApiQuery({ name: 'skip', required: false, type: Number })
   async getJobList(@Query() filters: FilterJobsDto): Promise<JobListResponseDto> {
     try {
-      return await this.jobService.getJobList(filters);
+      return await this.jobService.getJobListDirect(filters);
+    } catch (error) {
+      throw new HttpException(
+        error.message,
+        error.status || HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search for jobs with filters (alias for list endpoint)' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of job offers retrieved successfully',
+    type: JobListResponseDto
+  })
+  @ApiQuery({ name: 'keyword', required: false })
+  @ApiQuery({ name: 'location', required: false })
+  @ApiQuery({ name: 'domain', required: false })
+  @ApiQuery({ name: 'remote', required: false, type: Boolean })
+  @ApiQuery({ name: 'salaryMin', required: false, type: Number })
+  @ApiQuery({ name: 'salaryMax', required: false, type: Number })
+  @ApiQuery({ name: 'experienceMin', required: false, type: Number })
+  @ApiQuery({ name: 'experienceMax', required: false, type: Number })
+  @ApiQuery({ name: 'educationLevel', required: false })
+  @ApiQuery({ name: 'contractType', required: false })
+  @ApiQuery({ name: 'languages', required: false, isArray: true })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['newest', 'salary', 'experience'] })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'skip', required: false, type: Number })
+  async searchJobs(@Query() filters: FilterJobsDto): Promise<JobListResponseDto> {
+    try {
+      return await this.jobService.getJobListDirect(filters);
     } catch (error) {
       throw new HttpException(
         error.message,
@@ -126,25 +165,31 @@ export class JobController {
     }
   }
 
+  @Delete(':jobId')
   @UseGuards(JwtAuthGuard)
-  @Post(':jobId/apply')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Apply for a job' })
+  @ApiOperation({ summary: 'Delete a job posting' })
   @ApiResponse({
     status: 200,
-    description: 'Application submitted successfully',
+    description: 'Job deleted successfully',
     schema: {
       properties: {
         message: { type: 'string' }
       }
     }
   })
-  async applyToJob(
+  @ApiResponse({ status: 404, description: 'Job not found' })
+  @ApiResponse({ status: 403, description: 'Unauthorized to delete this job' })
+  async deleteJob(
     @Request() req,
     @Param('jobId') jobId: string
   ): Promise<{ message: string }> {
     try {
-      return await this.jobService.applyToJob(req.user.userId, jobId);
+      const companyId = req.user.companyId;
+      if (!companyId) {
+        throw new UnauthorizedException('Company access required');
+      }
+      return await this.jobService.deleteJob(companyId, jobId);
     } catch (error) {
       throw new HttpException(
         error.message,
@@ -153,25 +198,135 @@ export class JobController {
     }
   }
 
+  @Get(':jobId/candidate/:candidateId')
   @UseGuards(JwtAuthGuard)
-  @Post(':jobId/withdraw')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Withdraw a job application' })
+  @ApiOperation({ summary: 'Get complete candidate profile by job ID' })
+  @ApiParam({ name: 'jobId', description: 'Job ID' })
+  @ApiParam({ name: 'candidateId', description: 'Candidate ID' })
   @ApiResponse({
     status: 200,
-    description: 'Application withdrawn successfully',
+    description: 'Candidate profile retrieved successfully',
+    type: CandidateResponseDto
+  })
+  @ApiResponse({ status: 404, description: 'Job or candidate not found' })
+  @ApiResponse({ status: 403, description: 'Unauthorized access' })
+  async getCandidateByJobId(
+    @Request() req,
+    @Param('jobId') jobId: string,
+    @Param('candidateId') candidateId: string
+  ): Promise<any> {
+    try {
+      console.log('Auth Debug:', {
+        userRole: req.user.role,
+        userId: req.user.userId,
+        companyId: req.user.companyId,
+        requestedJobId: jobId,
+        requestedCandidateId: candidateId,
+        companyIdType: typeof req.user.companyId
+      });
+
+      // Check if user is the candidate themselves
+      if (req.user.userId === candidateId) {
+        console.log('Access granted: User is the candidate');
+        return await this.jobService.getCandidateByJobId(jobId, candidateId);
+      }
+
+      // Check if user is admin
+      if (req.user.role === 'admin') {
+        console.log('Access granted: User is admin');
+        return await this.jobService.getCandidateByJobId(jobId, candidateId);
+      }
+
+      // Check if user has company access (either as company or invited user)
+      if ((req.user.role === 'company' || req.user.role === 'user') && req.user.companyId) {
+        console.log('User is a company representative');
+        
+        // Convert string IDs to ObjectId for comparison
+        const jobObjectId = new Types.ObjectId(jobId);
+        const companyObjectId = new Types.ObjectId(req.user.companyId);
+        
+        // Verify job belongs to the company
+        const job = await this.jobModel.findOne({
+          _id: jobObjectId,
+          companyId: companyObjectId
+        })
+        .select('_id')
+        .lean()
+        .exec();
+
+        if (!job) {
+          console.log('Job not found or does not belong to company:', {
+            jobId,
+            companyId: req.user.companyId
+          });
+          throw new UnauthorizedException('Company is not authorized to access this job\'s candidates');
+        }
+
+        console.log('Access granted: Company owns the job');
+        return await this.jobService.getCandidateByJobId(jobId, candidateId);
+      }
+
+      throw new UnauthorizedException('Unauthorized access to candidate profile');
+    } catch (error) {
+      throw new HttpException(
+        error.message,
+        error.status || HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Get('v1/cached')
+  @ApiOperation({ summary: 'Get list of active job postings with caching enabled' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of job offers retrieved successfully with caching',
+    type: JobListResponseDto
+  })
+  @ApiQuery({ name: 'keyword', required: false })
+  @ApiQuery({ name: 'location', required: false })
+  @ApiQuery({ name: 'domain', required: false })
+  @ApiQuery({ name: 'remote', required: false, type: Boolean })
+  @ApiQuery({ name: 'salaryMin', required: false, type: Number })
+  @ApiQuery({ name: 'salaryMax', required: false, type: Number })
+  @ApiQuery({ name: 'experienceMin', required: false, type: Number })
+  @ApiQuery({ name: 'experienceMax', required: false, type: Number })
+  @ApiQuery({ name: 'educationLevel', required: false })
+  @ApiQuery({ name: 'contractType', required: false })
+  @ApiQuery({ name: 'languages', required: false, isArray: true })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['newest', 'salary', 'experience'] })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'skip', required: false, type: Number })
+  async getJobListCached(@Query() filters: FilterJobsDto): Promise<JobListResponseDto> {
+    try {
+      return await this.jobService.getJobListCached(filters);
+    } catch (error) {
+      throw new HttpException(
+        error.message,
+        error.status || HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Post(':jobId/seen')
+  @ApiOperation({ summary: 'Record a job view' })
+  @ApiParam({ name: 'jobId', description: 'Job ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Job view recorded successfully',
     schema: {
       properties: {
         message: { type: 'string' }
       }
     }
   })
-  async withdrawApplication(
-    @Request() req,
-    @Param('jobId') jobId: string
+  @ApiResponse({ status: 404, description: 'Job not found' })
+  async recordJobView(
+    @Param('jobId') jobId: string,
+    @Ip() ipAddress: string
   ): Promise<{ message: string }> {
     try {
-      return await this.jobService.withdrawApplication(req.user.userId, jobId);
+      return await this.jobService.recordJobView(jobId, ipAddress);
     } catch (error) {
       throw new HttpException(
         error.message,

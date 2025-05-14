@@ -114,6 +114,12 @@ export class Job {
 
   @Prop({ type: [{ type: MongooseSchema.Types.ObjectId, ref: 'Candidate' }], default: [] })
   applications: Types.ObjectId[];
+
+  @Prop({ type: [{ type: MongooseSchema.Types.ObjectId, ref: 'Candidate' }], default: [] })
+  seenBy: Types.ObjectId[];
+
+  @Prop({ type: Number, default: 0 })
+  seenCount: number;
 }
 
 export const JobSchema = SchemaFactory.createForClass(Job);

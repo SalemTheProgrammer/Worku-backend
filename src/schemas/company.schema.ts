@@ -2,6 +2,8 @@ import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 import { BusinessSector } from '../interfaces/company.interface';
 
+export type CompanyDocument = Company & Document;
+
 class InvitedUser {
   @Prop({ type: String, required: true })
   email: string;
@@ -14,7 +16,7 @@ class InvitedUser {
 }
 
 @Schema({ timestamps: true })
-export class Company extends Document {
+export class Company {
   @Prop({ type: String, required: true })
   nomEntreprise: string;
 
@@ -90,3 +92,11 @@ export class Company extends Document {
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);
+
+CompanySchema.virtual('name').get(function(this: CompanyDocument) {
+  return this.nomEntreprise;
+});
+
+CompanySchema.virtual('legalName').get(function(this: CompanyDocument) {
+  return this.nomEntreprise;
+});

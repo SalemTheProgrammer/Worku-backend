@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { Candidate, CandidateDocument } from '../schemas/candidate.schema';
 import { OtpService } from '../otp/otp.service';
-import { GeminiService } from '../services/gemini.service';
+import { ProfileSuggestionService } from '../services/profile-suggestion.service';
 import { TokenPayload } from '../interfaces/user.interface';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { VerifyCandidateOtpDto } from './dto/verify-candidate-otp.dto';
@@ -38,7 +38,7 @@ export class CandidateService {
     private jwtService: JwtService,
     private otpService: OtpService,
     private configService: ConfigService,
-    private geminiService: GeminiService,
+    private profileSuggestionService: ProfileSuggestionService,
   ) {}
 
   // --- Profile Suggestions ---
@@ -63,7 +63,7 @@ export class CandidateService {
     };
 
     try {
-      const suggestions = await this.geminiService.generateProfileSuggestions(profileData);
+      const suggestions = await this.profileSuggestionService.generateProfileSuggestions(profileData);
       return suggestions;
     } catch (error) {
       console.error('Profile suggestions error:', error);

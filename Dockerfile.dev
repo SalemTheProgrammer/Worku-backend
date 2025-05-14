@@ -1,0 +1,37 @@
+FROM node:20.11
+
+# Add development dependencies
+RUN apt-get update && \
+    apt-get install -y python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app
+
+# Copy package files
+COPY package*.json ./
+
+# Install NestJS CLI and dependencies
+RUN npm i -g @nestjs/cli
+RUN npm install
+
+# Verify NestJS installation
+RUN nest --version
+
+# Install any additional development packages needed for Redis
+RUN npm install cache-manager-redis-yet
+
+# Copy source code
+COPY . .
+
+# Expose ports
+EXPOSE 3000
+EXPOSE 9229
+
+# Create uploads directory with proper permissions
+RUN mkdir -p uploads && chown -R node:node uploads
+
+# Use node user for security
+USER node
+
+# Start in development mode (actual command comes from docker-compose.yml)
+CMD ["npm", "run", "start:dev"]

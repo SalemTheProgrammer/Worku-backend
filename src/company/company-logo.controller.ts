@@ -6,7 +6,7 @@ import { extname, join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CompanyService } from './company.service';
+import { CompanyProfileService } from './company-profile.service';
 import { FileUtils } from '../common/utils/file.utils';
 
 interface MulterRequest {
@@ -32,7 +32,7 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CompanyLogoController {
-  constructor(private readonly companyService: CompanyService) {}
+  constructor(private readonly companyProfileService: CompanyProfileService) {}
 
   @Post()
   @ApiOperation({
@@ -91,7 +91,7 @@ export class CompanyLogoController {
 
     // Construct the relative path for storage in the database
     const relativeFilePath = `${req.user.companyId}/${file.filename}`;
-    await this.companyService.updateLogo(req.user.companyId, relativeFilePath);
+    await this.companyProfileService.updateLogo(req.user.companyId, relativeFilePath);
 
     // Construct the URL to return to the client
     const responseUrl = `/uploads/${req.user.companyId}/${relativeFilePath}`;
@@ -108,7 +108,7 @@ export class CompanyLogoController {
     description: 'Remove the company logo'
   })
   async deleteLogo(@Req() req: RequestWithUser) {
-    await this.companyService.updateLogo(req.user.companyId, null);
+    await this.companyProfileService.updateLogo(req.user.companyId, null);
     return {
       message: 'Logo deleted successfully'
     };

@@ -1,0 +1,1 @@
+Invoke-RestMethod -Method DELETE -Uri "http://localhost:3000/reset-applications" -Verbose

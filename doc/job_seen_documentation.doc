@@ -1,0 +1,73 @@
+# Job Seen Feature Documentation
+
+## Overview
+This feature tracks when candidates view job postings and provides statistics about job views and applications.
+
+## Endpoints
+
+### 1. Mark Job as Seen (POST /jobs/:jobId/seen)
+
+Marks a job as seen by the authenticated candidate.
+
+*   **URL:** `/jobs/:jobId/seen`
+*   **Method:** `POST`
+*   **Authentication Required:** Yes (JWT Token)
+*   **URL Parameters:**
+    *   `jobId` - ID of the job post
+
+*   **Success Response:**
+    *   **Code:** 200
+    *   **Content:**
+        ```json
+        {
+          "message": "Job marked as seen successfully."
+        }
+        ```
+
+*   **Error Responses:**
+    *   **Code:** 404 NOT FOUND
+        ```json
+        {
+          "statusCode": 404,
+          "message": "Job not found"
+        }
+        ```
+    *   **Code:** 401 UNAUTHORIZED
+        ```json
+        {
+          "statusCode": 401,
+          "message": "Unauthorized"
+        }
+        ```
+
+*   **Example Usage:**
+    ```bash
+    curl -X POST \
+      http://localhost:3000/jobs/6464a4e54f44d4b79c6c6a6b/seen \
+      -H 'Authorization: Bearer <JWT_TOKEN>'
+    ```
+
+## Job Response Stats
+
+When retrieving job details or job lists, each job object now includes statistics about views and applications:
+
+```json
+{
+  "id": "6464a4e54f44d4b79c6c6a6b",
+  "title": "Software Engineer",
+  "stats": {
+    "applicationsCount": 5,  // Number of candidates who applied
+    "seenCount": 25         // Number of candidates who viewed the job
+  },
+  // ... other job fields
+}
+```
+
+These statistics help companies track the engagement of their job postings by showing:
+- How many candidates have viewed the job details
+- How many candidates have applied to the position
+
+This information can be used to:
+- Measure the effectiveness of job postings
+- Understand the conversion rate from views to applications
+- Identify which jobs are generating the most interest

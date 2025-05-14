@@ -1,7 +1,8 @@
 import { Controller, Get, Put, Post, UseGuards, Req, Body, HttpStatus, HttpException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CompanyService } from './company.service';
+import { CompanyProfileService } from './company-profile.service';
+import { InvitedUsersService } from './invited-users.service';
 import { UpdateCompanyProfileDto } from './dto/update-company-profile.dto';
 import { UpdateCompanySocialsDto } from './dto/update-company-socials.dto';
 import { UpdateCompanyCoordinatesDto } from './dto/update-company-coordinates.dto';
@@ -21,7 +22,10 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CompanyProfileController {
-  constructor(private readonly companyService: CompanyService) {}
+  constructor(
+    private readonly companyProfileService: CompanyProfileService,
+    private readonly invitedUsersService: InvitedUsersService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -36,7 +40,7 @@ export class CompanyProfileController {
   @ApiResponse({ status: 404, description: 'Not Found - Profile not found' })
   async getProfile(@Req() req: RequestWithUser) {
     try {
-      return await this.companyService.getCompanyProfile(req.user.email);
+      return await this.invitedUsersService.getCompanyById(req.user.companyId);
     } catch (error) {
       throw new HttpException(error.message, error.status || HttpStatus.NOT_FOUND);
     }
@@ -72,7 +76,7 @@ export class CompanyProfileController {
     @Body() updateCompanySocialsDto: UpdateCompanySocialsDto
   ) {
     try {
-      const updatedProfile = await this.companyService.updateCompanySocials(
+      const updatedProfile = await this.companyProfileService.updateCompanySocials(
         req.user.companyId,
         updateCompanySocialsDto
       );
@@ -111,7 +115,7 @@ export class CompanyProfileController {
     @Body() updateCompanyCoordinatesDto: UpdateCompanyCoordinatesDto
   ) {
     try {
-      const updatedProfile = await this.companyService.updateCompanyCoordinates(
+      const updatedProfile = await this.companyProfileService.updateCompanyCoordinates(
         req.user.companyId,
         updateCompanyCoordinatesDto
       );
@@ -140,7 +144,7 @@ export class CompanyProfileController {
     @Body() updateCompanyProfileDto: UpdateCompanyProfileDto
   ) {
     try {
-      const updatedProfile = await this.companyService.updateCompanyProfile(
+      const updatedProfile = await this.companyProfileService.updateCompanyProfile(
         req.user.companyId,
         updateCompanyProfileDto
       );
@@ -182,7 +186,7 @@ export class CompanyProfileController {
     @Body() inviteUserDto: InviteUserDto
   ) {
     try {
-      const updatedCompany = await this.companyService.inviteUser(
+      const updatedCompany = await this.invitedUsersService.inviteUser(
         req.user.companyId,
         inviteUserDto
       );

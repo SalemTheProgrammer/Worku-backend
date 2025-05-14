@@ -2,9 +2,9 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } f
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CertificationService } from '../services/certification.service';
-import { CreateCertificationDto, UpdateCertificationDto } from '../dto/certification.dto';
+import { CreateCertificationDto, UpdateCertificationDto, CertificationResponseDto } from '../dto/certification.dto';
 
-@Controller('candidate/certifications')
+@Controller('auth/candidate/certifications')
 @ApiTags('Candidate Certifications')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -15,7 +15,8 @@ export class CertificationController {
   @ApiOperation({ summary: 'Add new certification' })
   @ApiResponse({ 
     status: 201, 
-    description: 'Certification has been successfully created.'
+    description: 'Certification has been successfully created.',
+    type: CertificationResponseDto
   })
   async addCertification(
     @Request() req,
@@ -28,17 +29,20 @@ export class CertificationController {
   @ApiOperation({ summary: 'Get all certifications' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Returns all certifications for the candidate.'
+    description: 'Returns all certifications for the candidate.',
+    type: [CertificationResponseDto]
   })
   async getCertifications(@Request() req) {
-    return await this.certificationService.getCertifications(req.user.userId);
+    const certifications = await this.certificationService.getCertifications(req.user.userId);
+    return { certifications };
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get specific certification' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Returns the specified certification.'
+    description: 'Returns the specified certification.',
+    type: CertificationResponseDto
   })
   async getCertificationById(
     @Request() req,
@@ -51,7 +55,8 @@ export class CertificationController {
   @ApiOperation({ summary: 'Update certification' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Certification has been successfully updated.'
+    description: 'Certification has been successfully updated.',
+    type: CertificationResponseDto
   })
   async updateCertification(
     @Request() req,
@@ -76,18 +81,5 @@ export class CertificationController {
     @Param('id') certificationId: string
   ) {
     return await this.certificationService.deleteCertification(req.user.userId, certificationId);
-  }
-
-  @Get(':id/validate')
-  @ApiOperation({ summary: 'Validate certification expiry status' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Returns the validation status of the certification.'
-  })
-  async validateCertification(
-    @Request() req,
-    @Param('id') certificationId: string
-  ) {
-    return await this.certificationService.validateCertification(req.user.userId, certificationId);
   }
 }

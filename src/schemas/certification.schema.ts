@@ -12,11 +12,11 @@ export class Certification {
   @Prop({ required: true })
   issuingOrganization: string;
 
-  @Prop({ required: true })
-  issueDate: Date;
+  @Prop({ required: true, type: String })
+  issueDate: string;
 
-  @Prop()
-  expiryDate?: Date;
+  @Prop({ type: String })
+  expiryDate?: string;
 
   @Prop()
   credentialId?: string;
@@ -38,8 +38,9 @@ export const CertificationSchema = SchemaFactory.createForClass(Certification);
 
 // Add a pre-save hook to update isExpired based on expiryDate
 CertificationSchema.pre('save', function(next) {
-  if (this.expiryDate && this.expiryDate < new Date()) {
-    this.isExpired = true;
+  const today = new Date().toISOString().split('T')[0];
+  if (this.expiryDate) {
+    this.isExpired = this.expiryDate < today;
   } else {
     this.isExpired = false;
   }

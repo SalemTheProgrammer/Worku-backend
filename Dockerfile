@@ -1,37 +1,53 @@
-# Build stage
-FROM node:20.11-alpine AS builder
+# ========================
+# ⛏ Build Stage
+# ========================
+FROM node:18-alpine AS builder
 
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Set working directory
 WORKDIR /usr/src/app
 
-# Copy package files
+# Copy package files and install all dependencies
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy source code
+# Copy application source
 COPY . .
 
-# Build the application
+# Build NestJS app
 RUN npm run build
 
-# Production stage
-FROM node:20.11-alpine
+# ========================
+# 🚀 Production Stage
+# ========================
+FROM node:18-alpine
 
+# Create app directory
 WORKDIR /usr/src/app
 
-# Copy package files and built code
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/package*.json ./
-
-# Install production dependencies only
+# Copy only package files and install production dependencies
+COPY package*.json ./
 RUN npm ci --only=production
 
-# Set environment variables
+# Copy built app from builder
+COPY --from=builder /usr/src/app/dist ./dist
+
+# Optional: Copy env file for production
+COPY --from=builder /usr/src/app/.env.production ./.env.production
+
+# Optional: Create uploads folder if needed
+RUN mkdir -p uploads && chown -R node:node uploads
+
+# Run as non-root user
+USER node
+
+# Expose port used by NestJS (adjust if needed)
+EXPOSE 8080
+
+# Set env mode
 ENV NODE_ENV=production
 
-# Expose port
-EXPOSE 3000
-
-# Start the application
+# Start the app
 CMD ["node", "dist/main"]

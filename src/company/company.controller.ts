@@ -16,7 +16,8 @@ import {
   ApiConflictResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { CompanyService } from './company.service';
+import { CompanyAuthService } from './company-auth.service';
+import { CompanyProfileService } from './company-profile.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RegisterCompanyDto, VerifyCompanyOtpDto } from './dto/register-company.dto';
@@ -28,7 +29,8 @@ import { TokenPayload } from '../interfaces/user.interface';
 @Controller('auth/company')
 export class CompanyController {
   constructor(
-    private readonly companyService: CompanyService,
+    private readonly companyAuthService: CompanyAuthService,
+    private readonly companyProfileService: CompanyProfileService,
     private readonly authService: AuthService,
   ) {}
 
@@ -45,7 +47,7 @@ export class CompanyController {
     description: "L'entreprise est déjà enregistrée",
   })
   async register(@Body() registerCompanyDto: RegisterCompanyDto): Promise<{ message: string }> {
-    await this.companyService.registerCompany(registerCompanyDto);
+    await this.companyAuthService.registerCompany(registerCompanyDto);
     return {
       message: 'Inscription initiée. Veuillez vérifier votre email pour le code de vérification.',
     };
@@ -70,7 +72,7 @@ export class CompanyController {
       email: string;
     };
   }> {
-    const { company, tokens } = await this.companyService.verifyCompany(verifyCompanyOtpDto);
+    const { company, tokens } = await this.companyAuthService.verifyCompany(verifyCompanyOtpDto);
     
     return {
       message: 'Entreprise vérifiée avec succès',
@@ -113,7 +115,7 @@ export class CompanyController {
       email: string;
     };
   }> {
-    const { company, tokens } = await this.companyService.verifyLogin(verifyLoginDto);
+    const { company, tokens } = await this.companyAuthService.verifyLogin(verifyLoginDto);
     
     return {
       message: 'Connexion réussie',
@@ -155,7 +157,7 @@ export class CompanyController {
     if (!req.user.companyId) {
       throw new HttpException('Company ID not found', HttpStatus.BAD_REQUEST);
     }
-    await this.companyService.completeProfile(req.user.companyId, completeProfileDto);
+    await this.companyProfileService.completeProfile(req.user.companyId, completeProfileDto);
     return {
       message: "Profil de l'entreprise mis à jour avec succès",
     };
@@ -173,7 +175,7 @@ export class CompanyController {
     if (!req.user.companyId) {
       throw new HttpException('Company ID not found', HttpStatus.BAD_REQUEST);
     }
-    await this.companyService.disconnect(req.user.companyId);
+    await this.companyProfileService.disconnect(req.user.companyId);
     return {
       message: 'Déconnexion réussie',
     };

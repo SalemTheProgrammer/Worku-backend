@@ -22,17 +22,19 @@ export class CertificationService {
       candidate.certifications = [];
     }
 
-    const isExpired = createCertificationDto.expiryDate && 
-      new Date(createCertificationDto.expiryDate) < new Date();
+    const expiryDate = createCertificationDto.expiryDate || createCertificationDto.expirationDate;
+    const today = new Date().toISOString().split('T')[0];
 
     const newCertification = {
       _id: new Types.ObjectId().toString(),
       ...createCertificationDto,
-      issueDate: new Date(createCertificationDto.issueDate),
-      expiryDate: createCertificationDto.expiryDate ? new Date(createCertificationDto.expiryDate) : undefined,
-      isExpired,
+      issueDate: createCertificationDto.issueDate,
+      expiryDate: expiryDate,
+      isExpired: expiryDate ? expiryDate < today : false,
       skills: createCertificationDto.skills || []
     };
+
+    delete newCertification['expirationDate'];
 
     candidate.certifications.push(newCertification);
     await candidate.save();
@@ -57,24 +59,42 @@ export class CertificationService {
       throw new HttpException('Candidate not found', HttpStatus.NOT_FOUND);
     }
 
-    if (!candidate.certifications) {
-      throw new HttpException('Certification not found', HttpStatus.NOT_FOUND);
-    }
-
-    const certification = candidate.certifications.find(
-      (cert) => cert._id === certificationId
+    const certification = candidate.certifications?.find(
+      cert => cert._id === certificationId
     );
 
     if (!certification) {
-      throw new HttpException('Certification entry not found', HttpStatus.NOT_FOUND);
+      throw new HttpException('Certification not found', HttpStatus.NOT_FOUND);
     }
 
     return certification;
   }
 
   async updateCertification(userId: string, certificationId: string, updateCertificationDto: UpdateCertificationDto) {
-    const isExpired = updateCertificationDto.expiryDate && 
-      new Date(updateCertificationDto.expiryDate) < new Date();
+    const candidate = await this.candidateModel.findById(userId);
+    if (!candidate) {
+      throw new HttpException('Candidate not found', HttpStatus.NOT_FOUND);
+    }
+
+    const currentCertification = candidate.certifications?.find(
+      cert => cert._id === certificationId
+    );
+
+    if (!currentCertification) {
+      throw new HttpException('Certification not found', HttpStatus.NOT_FOUND);
+    }
+
+    const expiryDate = updateCertificationDto.expiryDate || updateCertificationDto.expirationDate;
+    const today = new Date().toISOString().split('T')[0];
+
+    const updateData = {
+      ...updateCertificationDto,
+      issueDate: updateCertificationDto.issueDate || currentCertification.issueDate,
+      expiryDate: expiryDate || currentCertification.expiryDate,
+      isExpired: expiryDate ? String(expiryDate) < today : currentCertification.isExpired
+    };
+
+    delete updateData['expirationDate'];
 
     const result = await this.candidateModel.updateOne(
       { 
@@ -85,21 +105,14 @@ export class CertificationService {
         $set: {
           'certifications.$': {
             _id: certificationId,
-            ...updateCertificationDto,
-            issueDate: new Date(updateCertificationDto.issueDate),
-            expiryDate: updateCertificationDto.expiryDate ? new Date(updateCertificationDto.expiryDate) : undefined,
-            isExpired,
-            skills: updateCertificationDto.skills || []
+            ...updateData
           }
         }
       }
     );
 
     if (result.matchedCount === 0) {
-      throw new HttpException(
-        'Certification entry not found',
-        HttpStatus.NOT_FOUND
-      );
+      throw new HttpException('Certification not found', HttpStatus.NOT_FOUND);
     }
 
     return this.getCertificationById(userId, certificationId);
@@ -116,48 +129,9 @@ export class CertificationService {
     );
 
     if (result.modifiedCount === 0) {
-      throw new HttpException(
-        'Certification entry not found',
-        HttpStatus.NOT_FOUND
-      );
+      throw new HttpException('Certification not found', HttpStatus.NOT_FOUND);
     }
 
-    return { message: 'Certification entry deleted successfully' };
-  }
-
-  async validateCertification(userId: string, certificationId: string) {
-    const certification = await this.getCertificationById(userId, certificationId);
-    
-    let isExpired = false;
-    if (certification.expiryDate) {
-      isExpired = new Date(certification.expiryDate) < new Date();
-      
-      // Update the expiry status if it has changed
-      if (isExpired !== certification.isExpired) {
-        await this.candidateModel.updateOne(
-          { 
-            _id: userId,
-            'certifications._id': certificationId 
-          },
-          {
-            $set: {
-              'certifications.$.isExpired': isExpired
-            }
-          }
-        );
-      }
-    }
-
-    return {
-      isValid: !isExpired,
-      expiryStatus: isExpired ? 'Expired' : 'Valid',
-      expiryDate: certification.expiryDate,
-      validationDetails: {
-        credentialId: certification.credentialId,
-        credentialUrl: certification.credentialUrl,
-        issuingOrganization: certification.issuingOrganization,
-        issueDate: certification.issueDate
-      }
-    };
+    return { message: 'Certification deleted successfully' };
   }
 }

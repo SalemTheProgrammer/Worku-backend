@@ -6,7 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import logger from '../utils/logger';
 
 export interface Response<T> {
@@ -27,23 +27,22 @@ export class TransformInterceptor<T>
     const request = ctx.getRequest();
     const response = ctx.getResponse();
     const statusCode = response.statusCode || HttpStatus.OK;
-
     const startTime = Date.now();
 
     return next.handle().pipe(
-      map(data => {
-        const endTime = Date.now();
-        const duration = endTime - startTime;
-
-        const result = {
-          statusCode,
-          message: data?.message || 'Success',
-          data: data?.data || data,
-          timestamp: new Date().toISOString(),
-        };
-
-        // Log the request and response
-        logger.info(`${request.method} ${request.url}`, {
+      map(data => ({
+        statusCode,
+        message: data?.message || 'Success',
+        data: data?.data || data,
+        timestamp: new Date().toISOString(),
+      })),
+      tap(result => {
+        const duration = Date.now() - startTime;
+        // Log only once with a unique request ID
+        const requestId = request.id || Date.now().toString();
+        
+        logger.info(`${request.method} ${request.path}`, {
+          requestId,
           duration: `${duration}ms`,
           statusCode,
           requestBody: request.body,
@@ -51,8 +50,6 @@ export class TransformInterceptor<T>
           requestQuery: request.query,
           responseData: result,
         });
-
-        return result;
       }),
     );
   }

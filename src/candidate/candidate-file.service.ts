@@ -1,16 +1,23 @@
-import { Injectable, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, NotFoundException, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Candidate, CandidateDocument } from '../schemas/candidate.schema';
-import { GeminiService } from '../services/gemini.service';
+import { CVAnalysisService } from '../services/cv-analysis.service';
+import { ImageAnalysisService } from '../services/image-analysis.service';
+import { CvAnalysisQueue } from './cv-analysis.queue';
+import { CvSkillsService } from './services/cv-skills.service';
 
 @Injectable()
 export class CandidateFileService {
+  private readonly logger = new Logger(CandidateFileService.name);
+
   constructor(
     @InjectModel(Candidate.name) private candidateModel: Model<CandidateDocument>,
-    private geminiService: GeminiService,
+    private cvAnalysisService: CVAnalysisService,
+    private imageAnalysisService: ImageAnalysisService,
+    private cvAnalysisQueue: CvAnalysisQueue,
   ) {}
 
   private async findCandidate(userId: string): Promise<CandidateDocument> {
@@ -80,11 +87,17 @@ export class CandidateFileService {
 
     // Save CV and validate
     candidate.cvUrl = newRelativePath;
+    // Initialize empty skills array with valid proficiency levels
+    candidate.skills = [];
     await candidate.save();
 
     try {
-      // Validate the CV by attempting to analyze it
-      await this.geminiService.analyzeCV(absolutePath);
+      // Basic validation of file format
+      await fs.access(absolutePath);
+      
+      // Queue CV analysis for background processing
+      await this.cvAnalysisQueue.addCvAnalysisJob(absolutePath, userId);
+      this.logger.log(`Queued CV analysis and skill extraction for candidate ${userId}`);
     } catch (error) {
       // If validation fails, clean up and throw error
       await this.safeUnlink(absolutePath);
@@ -142,7 +155,7 @@ export class CandidateFileService {
     }
 
     const absolutePath = path.resolve(candidate.cvUrl);
-    return await this.geminiService.analyzeCV(absolutePath);
+    return await this.cvAnalysisService.analyzeCV(absolutePath);
   }
 
   // --- CV Image Methods ---
@@ -173,6 +186,6 @@ export class CandidateFileService {
     }
 
     const absolutePath = path.resolve(candidate.cvImageUrl);
-    return await this.geminiService.analyzeResumeImage(absolutePath);
+    return await this.imageAnalysisService.analyzeResumeImage(absolutePath);
   }
 }

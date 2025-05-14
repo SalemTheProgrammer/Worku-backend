@@ -33,7 +33,10 @@ export class AuthService {
 
       // Find company with case-insensitive email match
       const company = await this.companyModel.findOne({
-        email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') }
+        $or: [
+          { email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } },
+          { 'invitedUsers.email': { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } }
+        ]
       });
       
       console.log('Company lookup result:', company ? 'Found' : 'Not found');
@@ -44,6 +47,18 @@ export class AuthService {
 
       if (!company.verified) {
         throw new BadRequestException('Cette entreprise n\'est pas encore vérifiée');
+      }
+
+      // Check if this is an invited user
+      const isInvitedUser = company.email.toLowerCase() !== normalizedEmail;
+      if (isInvitedUser) {
+        const invitedUser = company.invitedUsers?.find(
+          user => user.email.toLowerCase() === normalizedEmail
+        );
+        if (!invitedUser) {
+          throw new BadRequestException('Cette entreprise n\'existe pas');
+        }
+        console.log('Found invited user:', invitedUser.nomDeUtilisateur);
       }
 
       // Send OTP
@@ -64,6 +79,24 @@ export class AuthService {
       console.log('Verifying OTP for email:', email);
       await this.otpService.verifyOtp(email, otp);
       console.log('OTP verification successful');
+
+      // Check if this is an invited user and update their status
+      const normalizedEmail = email.toLowerCase().trim();
+      const company = await this.companyModel.findOne({
+        'invitedUsers.email': { $regex: new RegExp(`^${normalizedEmail}$`, 'i') }
+      });
+
+      if (company) {
+        const invitedUser = company.invitedUsers.find(
+          user => user.email.toLowerCase() === normalizedEmail
+        );
+        
+        if (invitedUser && !invitedUser.isAccepted) {
+          invitedUser.isAccepted = true;
+          await company.save();
+          console.log(`Updated invited user ${normalizedEmail} to accepted status`);
+        }
+      }
     } catch (error) {
       console.error('OTP verification error:', error);
       throw new UnauthorizedException('Code OTP invalide ou expiré');

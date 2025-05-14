@@ -1,70 +1,85 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
+import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CandidateController } from './candidate.controller';
-import { EducationController } from './controllers/education.controller';
-import { ExperienceController } from './controllers/experience.controller';
-import { SocialLinksController } from './controllers/social-links.controller';
-import { CertificationController } from './controllers/certification.controller';
-import { SkillController } from './controllers/skill.controller';
-import { CandidateFilesController } from './candidate-files.controller'; // Import new controller
+import { CandidateAuthController } from './auth/candidate-auth.controller';
 import { CandidateService } from './candidate.service';
-import { CandidateFileService } from './candidate-file.service'; // Import new service
-import { EducationService } from './services/education.service';
-import { ExperienceService } from './services/experience.service';
-import { SocialLinksService } from './services/social-links.service';
-import { CertificationService } from './services/certification.service';
+import { CandidateFileService } from './candidate-file.service';
+import { CandidateFilesController } from './candidate-files.controller';
+import { CandidateProfileController } from './candidate-profile.controller';
+import { SkillController } from './controllers/skill.controller';
 import { SkillService } from './services/skill.service';
-import { GeminiService } from '../services/gemini.service';
-import { OtpModule } from '../otp/otp.module';
+import { EducationController } from './controllers/education.controller';
+import { EducationService } from './services/education.service';
+import { CertificationController } from './controllers/certification.controller';
+import { CertificationService } from './services/certification.service';
+import { CvSkillsService } from './services/cv-skills.service';
+import { CvAnalysisQueue } from './cv-analysis.queue';
+import { CvAnalysisProcessor } from './cv-analysis.processor';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
-import { Education, EducationSchema } from '../schemas/education.schema';
-import { Experience, ExperienceSchema } from '../schemas/experience.schema';
-import { Certification, CertificationSchema } from '../schemas/certification.schema';
 import { Skill, SkillSchema } from '../schemas/skill.schema';
+import { Education, EducationSchema } from '../schemas/education.schema';
+import { Certification, CertificationSchema } from '../schemas/certification.schema';
+import { GeminiModule } from '../services/gemini.module';
+import { OtpModule } from '../otp/otp.module';
+import { CvProfileExtractorModule } from './cv-profile-extractor/cv-profile-extractor.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Candidate.name, schema: CandidateSchema },
+      { name: Skill.name, schema: SkillSchema },
       { name: Education.name, schema: EducationSchema },
-      { name: Experience.name, schema: ExperienceSchema },
-      { name: Certification.name, schema: CertificationSchema },
-      { name: Skill.name, schema: SkillSchema }
+      { name: Certification.name, schema: CertificationSchema }
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get('jwt.secret'),
         signOptions: {
-          expiresIn: configService.get('jwt.expiresIn'),
+          expiresIn: configService.get('jwt.expiresIn')
         },
       }),
       inject: [ConfigService],
     }),
-    OtpModule
+    BullModule.registerQueue({
+      name: 'cv-analysis',
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000
+        },
+        removeOnComplete: true
+      },
+    }),
+    ConfigModule,
+    OtpModule,
+    forwardRef(() => CvProfileExtractorModule),
+    GeminiModule
   ],
   controllers: [
     CandidateController,
+    CandidateFilesController,
+    CandidateProfileController,
+    CandidateAuthController,
     EducationController,
-    ExperienceController,
-    SocialLinksController,
-    CertificationController,
     SkillController,
-    CandidateFilesController // Add new controller
+    CertificationController,
   ],
   providers: [
     CandidateService,
+    CandidateFileService,
+    CvSkillsService,
+    CvAnalysisQueue,
+    CvAnalysisProcessor,
     EducationService,
-    ExperienceService,
-    SocialLinksService,
-    CertificationService,
     SkillService,
-    ConfigService,
-    GeminiService,
-    CandidateFileService // Add new service
+    CertificationService,
+    Logger
   ],
-  exports: [CandidateService, CandidateFileService] // Export new service if needed elsewhere
+  exports: [CandidateService, CandidateFileService]
 })
 export class CandidateModule {}

@@ -2,9 +2,10 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } f
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SkillService } from '../services/skill.service';
-import { CreateSkillDto, UpdateSkillDto, BulkUpdateSkillsDto } from '../dto/skill.dto';
+import { CreateSkillDto, UpdateSkillDto, SkillResponseDto } from '../dto/skill.dto';
+import { SkillCategory } from '../enums/skill-category.enum';
 
-@Controller('candidate/skills')
+@Controller('auth/candidate/skills')
 @ApiTags('Candidate Skills')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -15,7 +16,8 @@ export class SkillController {
   @ApiOperation({ summary: 'Add new skill' })
   @ApiResponse({ 
     status: 201, 
-    description: 'Skill has been successfully created.'
+    description: 'Skill has been successfully created.',
+    type: SkillResponseDto
   })
   async addSkill(
     @Request() req,
@@ -25,20 +27,23 @@ export class SkillController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all skills' })
+  @ApiOperation({ summary: 'Get all skills grouped by category' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Returns all skills for the candidate.'
+    description: 'Returns all skills grouped by category'
   })
-  async getSkills(@Request() req) {
-    return await this.skillService.getSkills(req.user.userId);
+  async getAllSkills(@Request() req) {
+    const skills = await this.skillService.getSkills(req.user.userId);
+    const groupedSkills = this.groupSkillsByCategory(skills);
+    return { skills: groupedSkills };
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get specific skill' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Returns the specified skill.'
+    description: 'Returns the specified skill.',
+    type: SkillResponseDto
   })
   async getSkillById(
     @Request() req,
@@ -51,7 +56,8 @@ export class SkillController {
   @ApiOperation({ summary: 'Update skill' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Skill has been successfully updated.'
+    description: 'Skill has been successfully updated.',
+    type: SkillResponseDto
   })
   async updateSkill(
     @Request() req,
@@ -78,16 +84,19 @@ export class SkillController {
     return await this.skillService.deleteSkill(req.user.userId, skillId);
   }
 
-  @Put()
-  @ApiOperation({ summary: 'Bulk update skills' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Skills have been successfully updated.'
-  })
-  async bulkUpdateSkills(
-    @Request() req,
-    @Body() bulkUpdateDto: BulkUpdateSkillsDto
-  ) {
-    return await this.skillService.bulkUpdateSkills(req.user.userId, bulkUpdateDto.skills);
+  private groupSkillsByCategory(skills: any[]) {
+    const groupedSkills: Record<SkillCategory, any[]> = {
+      [SkillCategory.TECHNICAL]: [],
+      [SkillCategory.INTERPERSONAL]: [],
+      [SkillCategory.LANGUAGE]: []
+    };
+
+    skills.forEach(skill => {
+      if (skill.category in groupedSkills) {
+        groupedSkills[skill.category].push(skill);
+      }
+    });
+
+    return groupedSkills;
   }
 }

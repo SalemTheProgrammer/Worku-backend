@@ -1,0 +1,79 @@
+# Job Listing and Filtering Documentation
+
+This document details the job listing functionality, including how filters are applied and the schema of the job objects.
+
+## Job Listing Endpoint
+
+The job listing endpoint is located at `/jobs/list`. It supports various filters to refine the search results.
+
+## Filter Jobs DTO (src/job/dto/filter-jobs.dto.ts)
+
+The `FilterJobsDto` defines the schema for the filters that can be applied to the job listing. Here's a breakdown of the properties:
+
+*   `location` (string, optional): Filters jobs by location (city). Example: `"Tunis"`.
+*   `domain` (string, optional): Filters jobs by activity domain. Example: `"QHSE"`.
+*   `salaryMin` (number, optional): Filters jobs with a minimum salary greater than or equal to this value. Example: `3000`.
+*   `salaryMax` (number, optional): Filters jobs with a maximum salary less than or equal to this value. Example: `4000`.
+*   `remote` (boolean, optional): If `true`, filters for remote jobs only.
+*   `contractType` (string, optional): Filters jobs by contract type. Must be one of the values defined in the `ContractType` enum.
+*   `experienceMin` (number, optional): Filters jobs with a minimum experience requirement greater than or equal to this value.
+*   `experienceMax` (number, optional): Filters jobs with a maximum experience requirement less than or equal to this value.
+*   `educationLevel` (string, optional): Filters jobs by education level. Must be one of the values defined in the `EducationLevel` enum.
+*   `languages` (string[], optional): Filters jobs that require any of the specified languages. Must be one of the values defined in the `Language` enum.
+*   `keyword` (string, optional): Filters jobs by keywords found in the job title or description.
+*   `onlyActive` (boolean, optional): If `true` (default), filters out expired and inactive jobs. If `false`, includes all jobs regardless of status.
+*   `sortBy` (string, optional): Specifies the sorting order of the results. Possible values: `"newest"`, `"salary"`, `"experience"`. Default is `"newest"`.
+*   `limit` (number, optional): Limits the number of results returned. Default is `20`.
+*   `skip` (number, optional): Skips a specified number of results, used for pagination. Default is `0`.
+
+## Job Schema (src/schemas/job.schema.ts)
+
+The `Job` schema defines the structure of a job posting object. Here's a breakdown of the properties:
+
+*   `offerType` (string, required): The type of offer (e.g., "Full-time", "Part-time").
+*   `title` (string, required): The title of the job posting.
+*   `requirements` (object, required): An object containing the job requirements:
+    *   `educationLevel` (string, required): The required education level.
+    *   `fieldOfStudy` (string, required): The required field of study.
+    *   `yearsExperienceRequired` (number, required): The number of years of experience required.
+    *   `experienceDomain` (string, required): The domain of experience required.
+    *   `hardSkills` (string, required): A comma-separated list of hard skills required.
+    *   `softSkills` (string, required): A comma-separated list of soft skills required.
+    *   `languages` (string, required): A comma-separated list of languages required.
+*   `jobDetails` (object, required): An object containing the job details:
+    *   `vacantPosts` (number, required): The number of vacant posts.
+    *   `activityDomain` (string, required): The activity domain of the job.
+    *   `contractType` (string, required): The contract type.
+    *   `availability` (string, required): The availability details.
+    *   `workLocation` (string, required): The work location details.
+    *   `tasks` (string, required): A description of the job tasks.
+    *   `city` (string, required): The city where the job is located.
+    *   `country` (string, required): The country where the job is located.
+*   `benefits` (object, required): An object containing the benefits information:
+    *   `benefitsDescription` (string, required): A description of the benefits.
+    *   `benefitsList` (string[], required): A list of benefits.
+*   `showSalary` (boolean, optional): Whether to show the salary range. Default is `true`.
+*   `salaryMin` (number, optional): The minimum salary for the job.
+*   `salaryMax` (number, optional): The maximum salary for the job.
+*   `salaryPeriod` (string, optional): The salary period (e.g., "Yearly", "Monthly").
+*   `salaryCurrency` (string, optional): The salary currency (e.g., "USD", "EUR").
+*   `salaryDescription` (string, optional): A description of the salary.
+*   `companyId` (ObjectId, required): The ID of the company posting the job.
+*   `isActive` (boolean, optional): Whether the job posting is active. Default is `true`.
+*   `publishedAt` (Date, optional): The date when the job was published.
+*   `expiresAt` (Date, required): The date when the job posting expires.
+*   `applications` (ObjectId[], optional): An array of candidate IDs who have applied for the job.
+
+## Filtering Logic (src/job/job.service.ts)
+
+The `getJobList` function in `src/job/job.service.ts` implements the filtering logic. Here's a summary:
+
+1.  **Base Query:** The function starts with a base query that always filters out expired and inactive jobs unless `onlyActive` is set to `false` in the filter.
+2.  **Text Search:** If a `keyword` is provided, the function performs a text search on the `title`, `jobDetails.tasks`, `jobDetails.activityDomain`, `jobDetails.city`, `jobDetails.country`, `requirements.hardSkills`, and `requirements.softSkills` fields.
+3.  **Exact Match Filters:** The function uses exact match filters for `location` and `domain`.
+4.  **Range Filters:** The function uses range filters for `salaryMin`, `salaryMax`, `experienceMin`, and `experienceMax`.
+5.  **Other Filters:** The function uses exact match filters for `contractType` and `educationLevel`. It uses a regular expression to filter jobs that require any of the specified `languages`.
+6.  **Sorting:** The function sorts the results based on the `sortBy` parameter. Possible values: `"newest"`, `"salary"`, `"experience"`.
+7.  **Pagination:** The function uses the `limit` and `skip` parameters to implement pagination.
+
+This documentation should provide a comprehensive understanding of the job listing functionality and how the filters are applied.

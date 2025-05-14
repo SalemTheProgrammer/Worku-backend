@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { EducationService } from '../services/education.service';
 import { CreateEducationDto, UpdateEducationDto } from '../dto/education.dto';
 
-@Controller('candidate/education')
+@Controller('auth/candidate/education')
 @ApiTags('Candidate Education')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -31,7 +31,8 @@ export class EducationController {
     description: 'Returns all education entries for the candidate.'
   })
   async getEducation(@Request() req) {
-    return await this.educationService.getEducation(req.user.userId);
+    const education = await this.educationService.getEducation(req.user.userId);
+    return { education };
   }
 
   @Get(':id')

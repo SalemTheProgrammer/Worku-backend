@@ -7,7 +7,7 @@ import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class OtpService {
-  private transporter: nodemailer.Transporter;
+  public transporter: nodemailer.Transporter; // Make transporter public
 
   constructor(
     @InjectModel('Otp') private otpModel: Model<Otp>,
@@ -25,20 +25,28 @@ export class OtpService {
   }
 
   async sendOtp(email: string): Promise<void> {
+    // Normalize email to ensure case-insensitive matching
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log('Generating OTP for:', normalizedEmail);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
-    await this.otpModel.findOneAndUpdate(
-      { email },
-      { 
-        email,
-        otp,
-        expiresAt,
-        verified: false
-      },
-      { upsert: true }
+    // First invalidate any existing OTPs for this email
+    await this.otpModel.updateMany(
+      { email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } },
+      { verified: true }
     );
+
+    // Create new OTP record
+    const otpDoc = new this.otpModel({
+      email: normalizedEmail,
+      otp,
+      expiresAt,
+      verified: false
+    });
+
+    await otpDoc.save();
 
     try {
       await this.transporter.sendMail({
@@ -66,28 +74,53 @@ export class OtpService {
     // Normalize email to ensure case-insensitive matching
     const normalizedEmail = email.toLowerCase().trim();
     
-    // Add logging to debug the verification attempt
-    console.log('Verifying OTP:', {
+    console.log('Starting OTP verification:', {
       email: normalizedEmail,
       otp,
       currentTime: new Date()
     });
 
-    const otpRecord = await this.otpModel.findOne({ 
-      email: normalizedEmail,
+    // Find all OTPs for this email to help with debugging
+    const allOtps = await this.otpModel.find({
+      email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') }
+    }).sort({ createdAt: -1 });
+
+    console.log('All OTPs found:', allOtps.length);
+
+    // Find valid OTP
+    const otpRecord = await this.otpModel.findOne({
+      email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
       otp,
       expiresAt: { $gt: new Date() },
       verified: false
+    }).sort({ createdAt: -1 });  // Get the most recent OTP in case there are multiple
+
+    // Enhanced logging for debugging
+    console.log('OTP Verification Details:', {
+      found: !!otpRecord,
+      totalOtpsFound: allOtps.length,
+      otpMatches: allOtps.some(record => record.otp === otp),
+      expired: otpRecord ? otpRecord.expiresAt < new Date() : null,
+      verified: otpRecord ? otpRecord.verified : null,
+      providedOtp: otp,
+      currentTime: new Date(),
+      emailNormalized: normalizedEmail,
+      mostRecentOtp: allOtps.length > 0 ? allOtps[0].otp : null,
+      mostRecentOtpTimestamp: allOtps.length > 0 ? allOtps[0].expiresAt : null
     });
 
-    // Add logging to see what was found
-    console.log('OTP Record found:', otpRecord);
-
     if (!otpRecord) {
+      console.log('OTP verification failed. Reasons:', {
+        noValidOtp: !allOtps.length,
+        allExpired: allOtps.every(record => record.expiresAt < new Date()),
+        allVerified: allOtps.every(record => record.verified),
+        noMatch: !allOtps.some(record => record.otp === otp)
+      });
       throw new HttpException('Invalid or expired OTP', HttpStatus.BAD_REQUEST);
     }
 
     // Mark OTP as verified
     await this.otpModel.findByIdAndUpdate(otpRecord._id, { verified: true });
+    console.log('OTP marked as verified successfully');
   }
 }

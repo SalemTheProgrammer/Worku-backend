@@ -1,18 +1,102 @@
-import { Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 
-class CompanyResponseDto {
+export class JobStatsDto {
+  @ApiProperty()
+  applicationsCount: number;
+
+  @ApiProperty()
+  seenCount: number;
+}
+
+export class CompanyResponseDto {
   @ApiProperty()
   id: string;
 
   @ApiProperty()
   nomEntreprise: string;
 
-  @ApiPropertyOptional()
-  description?: string;
+  @ApiProperty()
+  numeroRNE: string;
 
-  @ApiPropertyOptional()
-  profilePicture?: string;
+  @ApiProperty()
+  email: string;
+
+  @ApiProperty()
+  secteurActivite: string;
+
+  @ApiProperty()
+  tailleEntreprise: string;
+
+  @ApiProperty()
+  phone: string;
+
+  @ApiProperty()
+  adresse: string;
+
+  @ApiProperty()
+  siteWeb: string;
+
+  @ApiProperty()
+  reseauxSociaux: Record<string, string>;
+
+  @ApiProperty()
+  description: string;
+
+  @ApiProperty()
+  activiteCles: string[];
+
+  @ApiProperty()
+  logo: string;
+
+  @ApiProperty()
+  profileCompleted: boolean;
+
+  @ApiProperty()
+  verified: boolean;
+
+  @ApiProperty()
+  lastLoginAt: Date;
+
+  @ApiProperty()
+  notificationSettings: Record<string, boolean>;
+}
+
+export class ApplicationResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  firstName: string;
+
+  @ApiProperty()
+  lastName: string;
+
+  @ApiProperty()
+  email: string;
+
+  @ApiProperty()
+  phone: string;
+
+  @ApiProperty()
+  location: string;
+
+  @ApiProperty()
+  profileImage?: string;
+
+  @ApiProperty()
+  cv?: string;
+
+  @ApiProperty()
+  title?: string;
+
+  @ApiProperty()
+  skills: string[];
+
+  @ApiProperty()
+  yearsOfExperience: number;
+
+  @ApiProperty()
+  appliedAt: Date;
 }
 
 export class JobResponseDto {
@@ -26,77 +110,60 @@ export class JobResponseDto {
   title: string;
 
   @ApiProperty()
-  educationLevel: string;
+  stats: JobStatsDto;
 
   @ApiProperty()
-  fieldOfStudy: string;
+  applications: ApplicationResponseDto[];
 
   @ApiProperty()
-  yearsExperienceRequired: number;
+  requirements: {
+    educationLevel: string;
+    fieldOfStudy: string;
+    yearsExperienceRequired: number;
+    experienceDomain: string;
+    hardSkills: string;
+    softSkills: string;
+    languages: string;
+  };
 
   @ApiProperty()
-  experienceDomain: string;
+  jobDetails: {
+    vacantPosts: number;
+    activityDomain: string;
+    contractType: string;
+    availability: string;
+    workLocation: string;
+    tasks: string;
+    city: string;
+    country: string;
+  };
 
   @ApiProperty()
-  hardSkills: string;
+  benefits: {
+    benefitsDescription: string;
+    benefitsList: string[];
+  };
 
   @ApiProperty()
-  softSkills: string;
+  showSalary: boolean;
 
   @ApiProperty()
-  languages: string;
-
-  @ApiProperty()
-  vacantPosts: number;
-
-  @ApiProperty()
-  activityDomain: string;
-
-  @ApiProperty()
-  contractType: string;
-
-  @ApiProperty()
-  availability: string;
-
-  @ApiProperty()
-  workLocation: string;
-
-  @ApiProperty()
-  tasks: string;
-
-  @ApiProperty()
-  city: string;
-
-  @ApiProperty()
-  country: string;
-
-  @ApiProperty()
-  benefitsDescription: string;
-
-  @ApiProperty()
-  benefitsList: string[];
-
-  @ApiPropertyOptional()
-  showSalary?: boolean;
-
-  @ApiPropertyOptional()
   salaryMin?: number;
 
-  @ApiPropertyOptional()
+  @ApiProperty()
   salaryMax?: number;
 
-  @ApiPropertyOptional()
+  @ApiProperty()
   salaryPeriod?: string;
 
-  @ApiPropertyOptional()
+  @ApiProperty()
   salaryCurrency?: string;
 
-  @ApiPropertyOptional()
+  @ApiProperty()
   salaryDescription?: string;
 
   @ApiProperty()
-  @Type(() => CompanyResponseDto)
-  company: CompanyResponseDto;
+  company?: CompanyResponseDto;
 
   @ApiProperty()
   createdAt: Date;
@@ -109,18 +176,6 @@ export class JobResponseDto {
 
   @ApiProperty()
   isActive: boolean;
-
-  @ApiProperty()
-  applications: number;
-
-  @ApiProperty()
-  requirements: any;
-
-  @ApiProperty()
-  jobDetails: any;
-
-  @ApiProperty()
-  benefits: any;
 }
 
 export class JobListResponseDto {

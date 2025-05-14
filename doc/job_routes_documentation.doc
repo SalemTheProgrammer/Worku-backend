@@ -1,0 +1,244 @@
+# Job Module Routes Documentation
+
+This document provides a detailed overview of all the API routes available in the Job module.
+
+## Base URL
+
+All endpoints are prefixed with `/jobs`.
+
+## Endpoints
+
+### 1. Create a new job posting (POST /jobs/create)
+
+*   **Summary:** Creates a new job posting.
+*   **Description:** Allows a company to create a new job offer. Requires a valid JWT token for authentication.
+*   **Authentication:** Requires a valid JWT token in the `Authorization` header.
+*   **Request Body:**
+
+    ```json
+    {
+      "job": {
+        "offerType": "Full-time",
+        "title": "Software Engineer",
+        "requirements": {
+          "educationLevel": "Bachelor's Degree",
+          "fieldOfStudy": "Computer Science",
+          "yearsExperienceRequired": 3,
+          "experienceDomain": "Software Development",
+          "hardSkills": "JavaScript, React, Node.js",
+          "softSkills": "Teamwork, Communication",
+          "languages": "English"
+        },
+        "jobDetails": {
+          "vacantPosts": 2,
+          "activityDomain": "Technology",
+          "contractType": "Permanent",
+          "availability": "Immediate",
+          "workLocation": "Remote",
+          "tasks": "Develop and maintain web applications",
+          "city": "San Francisco",
+          "country": "USA"
+        },
+        "benefits": {
+          "benefitsDescription": "Competitive salary and benefits",
+          "benefitsList": [
+            "Health insurance",
+            "Paid time off"
+          ]
+        },
+        "expiresAt": "2023-06-16T14:00:00.000Z"
+      }
+    }
+    ```
+
+*   **Request Body Parameters:** (See `CreateJobDto` for details)
+*   **Responses:**
+    *   **201 Created:** Job offer created successfully.
+
+        ```json
+        {
+          "message": "Job offer created successfully.",
+          "id": "6464a4e54f44d4b79c6c6a6b"
+        }
+        ```
+
+    *   **400 Bad Request:** Failed to create job.
+    *   **401 Unauthorized:** Company access required.
+*   **Example Usage:**
+
+    ```bash
+    curl -X POST \
+      http://localhost:3000/jobs/create \
+      -H 'Authorization: Bearer <JWT_TOKEN>' \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "job": {
+          "offerType": "Full-time",
+          "title": "Software Engineer",
+          "requirements": {
+            "educationLevel": "Bachelor\'s Degree",
+            "fieldOfStudy": "Computer Science",
+            "yearsExperienceRequired": 3,
+            "experienceDomain": "Software Development",
+            "hardSkills": "JavaScript, React, Node.js",
+            "softSkills": "Teamwork, Communication",
+            "languages": "English"
+          },
+          "jobDetails": {
+            "vacantPosts": 2,
+            "activityDomain": "Technology",
+            "contractType": "Permanent",
+            "availability": "Immediate",
+            "workLocation": "Remote",
+            "tasks": "Develop and maintain web applications",
+            "city": "San Francisco",
+            "country": "USA"
+          },
+          "benefits": {
+            "benefitsDescription": "Competitive salary and benefits",
+            "benefitsList": [
+              "Health insurance",
+              "Paid time off"
+            ]
+          },
+          "expiresAt": "2023-06-16T14:00:00.000Z"
+        }
+      }'
+    ```
+
+### 2. Get all jobs posted by the authenticated company (GET /jobs/my-jobs)
+
+*   **Summary:** Retrieves all job postings created by the authenticated company.
+*   **Description:** Returns a list of job offers created by the company associated with the provided JWT token.
+*   **Authentication:** Requires a valid JWT token in the `Authorization` header.
+*   **Responses:**
+    *   **200 OK:** List of company jobs retrieved successfully. (See `JobListResponseDto` for the response structure)
+    *   **401 Unauthorized:** Company access required.
+*   **Example Usage:**
+
+    ```bash
+    curl -X GET \
+      http://localhost:3000/jobs/my-jobs \
+      -H 'Authorization: Bearer <JWT_TOKEN>'
+    ```
+
+### 3. Get remaining available job posts for the company (GET /jobs/remaining-posts)
+
+*   **Summary:** Retrieves the number of remaining job posts available for the authenticated company.
+*   **Description:** Returns the number of job postings a company can still create based on their current plan.
+*   **Authentication:** Requires a valid JWT token in the `Authorization` header.
+*   **Responses:**
+    *   **200 OK:** Number of remaining job posts retrieved successfully. (See `RemainingPostsResponseDto` for the response structure)
+    *   **401 Unauthorized:** Company access required.
+*   **Example Usage:**
+
+    ```bash
+    curl -X GET \
+      http://localhost:3000/jobs/remaining-posts \
+      -H 'Authorization: Bearer <JWT_TOKEN>'
+    ```
+
+### 4. Get list of active job postings with optional filters (GET /jobs/list)
+
+*   **Summary:** Retrieves a list of active job postings, with support for various filters.
+*   **Description:** Returns a list of job offers that match the specified filter criteria. If no filters are provided, it returns all active job postings.
+*   **Query Parameters:** (See `FilterJobsDto` for details)
+*   **Responses:**
+    *   **200 OK:** List of job offers retrieved successfully. (See `JobListResponseDto` for the response structure)
+*   **Example Usage:**
+
+    ```bash
+    curl -X GET \
+      'http://localhost:3000/jobs/list?keyword=engineer&location=london&remote=true&salaryMin=50000&salaryMax=100000&limit=10&skip=0'
+    ```
+
+### 5. Get detailed information about a specific job (GET /jobs/:jobId)
+
+*   **Summary:** Retrieves detailed information about a specific job.
+*   **Description:** Returns the details of a job posting, including company information.
+*   **Path Parameters:**
+    *   `jobId` (string, required): The ID of the job to retrieve.
+*   **Responses:**
+    *   **200 OK:** Job details retrieved successfully. (See `JobResponseDto` for the response structure)
+    *   **404 Not Found:** Job not found or has expired.
+*   **Example Usage:**
+
+    ```bash
+    curl -X GET \
+      http://localhost:3000/jobs/6464a4e54f44d4b79c6c6a6b
+    ```
+
+### 6. Apply for a job (POST /jobs/:jobId/apply)
+
+*   **Summary:** Applies for a job.
+*   **Description:** Allows a candidate to apply for a specific job. Requires a valid JWT token for authentication.
+*   **Authentication:** Requires a valid JWT token in the `Authorization` header.
+*   **Path Parameters:**
+    *   `jobId` (string, required): The ID of the job to apply for.
+*   **Responses:**
+    *   **200 OK:** Application submitted successfully.
+
+        ```json
+        {
+          "message": "Job application submitted successfully."
+        }
+        ```
+
+    *   **404 Not Found:** Invalid job or candidate ID.
+*   **Example Usage:**
+
+    ```bash
+    curl -X POST \
+      http://localhost:3000/jobs/6464a4e54f44d4b79c6c6a6b/apply \
+      -H 'Authorization: Bearer <JWT_TOKEN>'
+    ```
+
+### 7. Withdraw a job application (POST /jobs/:jobId/withdraw)
+
+*   **Summary:** Withdraws a job application.
+*   **Description:** Allows a candidate to withdraw their application for a specific job. Requires a valid JWT token for authentication.
+*   **Authentication:** Requires a valid JWT token in the `Authorization` header.
+*   **Path Parameters:**
+    *   `jobId` (string, required): The ID of the job to withdraw the application from.
+*   **Responses:**
+    *   **200 OK:** Application withdrawn successfully.
+
+        ```json
+        {
+          "message": "Job application withdrawn successfully."
+        }
+        ```
+
+    *   **404 Not Found:** Invalid job or candidate ID.
+*   **Example Usage:**
+
+    ```bash
+    curl -X POST \
+      http://localhost:3000/jobs/6464a4e54f44d4b79c6c6a6b/withdraw \
+      -H 'Authorization: Bearer <JWT_TOKEN>'
+    ```
+
+### 8. Delete a job posting (DELETE /jobs/:jobId)
+
+*   **Summary:** Deletes a job posting.
+*   **Description:** Allows a company to delete a specific job posting. Requires a valid JWT token for authentication.
+*   **Authentication:** Requires a valid JWT token in the `Authorization` header.
+*   **Path Parameters:**
+    *   `jobId` (string, required): The ID of the job to delete.
+*   **Responses:**
+    *   **200 OK:** Job deleted successfully.
+
+        ```json
+        {
+          "message": "Job deleted successfully"
+        }
+        ```
+
+    *   **404 Not Found:** Job not found.
+    *   **403 Forbidden:** Unauthorized to delete this job.
+*   **Example Usage:**
+
+    ```bash
+    curl -X DELETE \
+      http://localhost:3000/jobs/6464a4e54f44d4b79c6c6a6b \
+      -H 'Authorization: Bearer <JWT_TOKEN>'

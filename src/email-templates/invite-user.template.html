@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+        }
+        .logo {
+            max-width: 200px;
+            height: auto;
+        }
+        .content {
+            padding: 20px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .company-logo {
+            max-width: 150px;
+            height: auto;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #2563eb;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="{{platformLogo}}" alt="Worku" class="logo">
+        </div>
+        <div class="content">
+            <h2>Bienvenue chez {{companyName}} !</h2>
+            
+            <p>Bonjour {{userName}},</p>
+            
+            <p>Nous sommes ravis de vous accueillir dans l'équipe de {{companyName}} sur la plateforme Worku.</p>
+
+            {{#if companyLogo}}
+            <div style="text-align: center;">
+                <img src="{{companyLogo}}" alt="{{companyName}}" class="company-logo">
+            </div>
+            {{/if}}
+
+            <p>En tant que nouveau membre de l'équipe, vous aurez accès à notre espace de recrutement et pourrez participer activement à la croissance de notre entreprise.</p>
+
+            <p>Vos informations d'accès :</p>
+            <ul>
+                <li>Email : {{userEmail}}</li>
+                <li>Nom d'utilisateur : {{userName}}</li>
+            </ul>
+
+            <div style="text-align: center;">
+                <a href="{{loginUrl}}" class="button">Accéder à la plateforme</a>
+            </div>
+
+            <p>Nous sommes impatients de collaborer avec vous sur Worku !</p>
+
+            <p>Si vous avez des questions, n'hésitez pas à contacter votre administrateur.</p>
+        </div>
+        <div class="footer">
+            <p>© {{currentYear}} Worku. Tous droits réservés.</p>
+        </div>
+    </div>
+</body>
+</html>

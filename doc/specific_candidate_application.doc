@@ -1,0 +1,77 @@
+# Candidate Application Documentation - Example Scenario
+
+## Candidate Profile: John Doe (Software Engineer)
+
+### Base Profile Data
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john.doe@example.com",
+  "professionalStatus": "ACTIVELY_LOOKING",
+  "skills": [
+    {
+      "name": "JavaScript",
+      "category": "TECHNICAL",
+      "proficiencyLevel": "Professionnel",
+      "yearsOfExperience": 5
+    },
+    {
+      "name": "English",
+      "category": "LANGUAGE",
+      "proficiencyLevel": "Natif",
+      "isLanguage": true
+    }
+  ]
+}
+```
+
+---
+
+## Application Steps
+
+1. **CV Upload & Analysis**
+   ```bash
+   POST /auth/candidate/upload-cv
+   - Headers: Authorization: Bearer <JWT>
+   - Form-Data: cvFile=@john_doe_cv.pdf
+   ```
+
+2. **Skill Validation**
+   ```typescript
+   // cv-skills.service.ts
+   validateProficiency(level: string): string {
+     const cleanLevel = level.toLowerCase()
+       .replace('advanced', 'professionnel')
+       .replace('native', 'natif');
+     // Returns validated French proficiency level
+   }
+   ```
+
+3. **Job Application Submission**
+   ```json
+   POST /jobs/663b7ac9ab392d36b9433d0d/apply
+   {
+     "coverLetter": "Développeur full-stack avec 5 ans d'expérience...",
+     "referralCode": "EMP-123"
+   }
+   ```
+
+---
+
+## Validation Success Criteria
+1. All skills have valid `proficiencyLevel` from enum:  
+   `['Natif', 'Professionnel', 'Intermédiaire', 'Débutant']`
+2. Language skills marked with `isLanguage: true`
+3. Technical skills require `yearsOfExperience`
+4. Profile completion score > 80%
+
+---
+
+## Troubleshooting Guide
+
+| Error | Solution |
+|-------|----------|
+| `skills.X.proficiencyLevel invalid` | Use French terms only, ensure proper case |
+| `Missing yearsOfExperience` | Add duration for technical skills |
+| `Invalid language skill format` | Set `isLanguage: true` for language skills |

@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: worku-api
+    container_name: worku-api
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env.production
+    depends_on:
+      - mongodb
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - worku-network
+
+  mongodb:
+    image: mongo:6
+    container_name: worku-mongodb
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    command: mongod --bind_ip_all
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD:-password}
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - worku-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: worku-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - worku-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  worku-network:
+    driver: bridge

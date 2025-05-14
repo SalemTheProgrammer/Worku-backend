@@ -24,11 +24,6 @@ export class RegisterCandidateDto {
   @MinLength(8)
   password: string;
 
-  @ApiProperty({ example: '+1234567890', required: false })
-  @IsString()
-  @IsOptional()
-  phone?: string;
-
   @ApiProperty({
     enum: EmploymentStatus,
     example: EmploymentStatus.LOOKING_FOR_JOB,
