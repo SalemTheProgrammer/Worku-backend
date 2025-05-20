@@ -9,6 +9,8 @@ interface ApplicationAnalysisResponse {
     skills: number;
     experience: number;
     education: number;
+    yearsExperience: number;  // Required field
+    languages?: number;       // Optional field
   };
   jobFitSummary: {
     isRecommended: boolean;
@@ -168,7 +170,8 @@ export class CVAnalysisService {
         overall: 0,
         skills: 0,
         experience: 0,
-        education: 0
+        education: 0,
+        yearsExperience: 0
       },
       jobFitSummary: {
         isRecommended: false,
@@ -231,50 +234,135 @@ export class CVAnalysisService {
 
   private createPDFAnalysisPrompt(): string {
     return `
-    Analyse les métadonnées et le format de ce CV PDF.
-    
-    IMPORTANT: Tu dois UNIQUEMENT répondre avec un JSON valide, rien d'autre.
-    
-    Identifie :
-    - Le logiciel utilisé pour la création (si détectable)
-    - La structure générale du document
-    - La lisibilité et la qualité du formatage
+    RÈGLES CRITIQUES - APPLICATION STRICTE:
 
-    RÉPONDS STRICTEMENT AVEC CE FORMAT JSON SANS AUCUN TEXTE AVANT OU APRÈS:
+    1. CALCUL DE L'EXPÉRIENCE:
+    - Si uniquement stages/internships: yearsExperience = 0
+    - Si expérience < 3 ans: indiquer le nombre exact
+    - Ignorer: stages, projets personnels, freelance
+
+    2. RÈGLES DE SCORING OBLIGATOIRES:
+    Si yearsExperience = 0:
     {
-      "signauxAlerte": [
-        {
-          "type": "Metadonnées",
-          "probleme": "Description du problème lié au format",
-          "severite": "faible"
+      "fitScore": {
+        "overall": 25,           // FIXE à 25%
+        "experience": 0,         // FIXE à 0
+        "yearsExperience": 0     // FIXE à 0
+      }
+    }
+
+    Si yearsExperience < 3:
+    {
+      "fitScore": {
+        "overall": 25,           // MAXIMUM 25%
+        "experience": 0,         // FIXE à 0
+        "yearsExperience": X     // Valeur réelle
+      }
+    }
+
+    FORMAT DE RÉPONSE REQUIS:
+    {
+      "fitScore": {
+        "overall": 25,          // MAX 30% si pas d'expérience
+        "skills": [0-100],      // Score normal basé sur compétences
+        "experience": 0,        // DOIT être 0 si stages uniquement
+        "education": [0-100],   // Score normal basé sur formation
+        "yearsExperience": 0    // DOIT être 0 pour stages
+      },
+      "jobFitSummary": {
+        "isRecommended": false,   // TOUJOURS false si pas d'expérience
+        "fitLevel": "Low",       // TOUJOURS "Low" si pas d'expérience
+        "reason": "string",
+        "fitBreakdown": {
+          "skillsFit": {
+            "matchLevel": "string",
+            "details": []
+          },
+          "experienceFit": {
+            "matchLevel": "Weak",  // TOUJOURS "Weak" si pas d'expérience
+            "details": []
+          },
+          "educationFit": {
+            "matchLevel": "string",
+            "details": []
+          }
         }
-      ],
-      "resume": "Résumé de l'analyse du format"
+      },
+      "recruiterRecommendations": {
+        "decision": "Reject",     // TOUJOURS "Reject" si pas d'expérience
+        "suggestedAction": "string",
+        "feedbackToSend": []
+      }
     }`;
   }
 
   private createCVAnalysisPrompt(cvContent: string): string {
     return `
-    Analyse le contenu de ce CV.
-    
-    IMPORTANT: Tu dois UNIQUEMENT répondre avec un JSON valide, rien d'autre. Pas d'introduction, pas d'explication, seulement le JSON.
-    
+    RÈGLES CRITIQUES - APPLICATION STRICTE:
+
+    1. CALCUL DE L'EXPÉRIENCE:
+    - Si uniquement stages/internships: yearsExperience = 0
+    - Si expérience < 3 ans: indiquer le nombre exact
+    - Ignorer: stages, projets personnels, freelance
+
+    2. RÈGLES DE SCORING OBLIGATOIRES:
+    Si yearsExperience = 0:
+    {
+      "fitScore": {
+        "overall": 25,           // FIXE à 25%
+        "experience": 0,         // FIXE à 0
+        "yearsExperience": 0     // FIXE à 0
+      }
+    }
+
+    Si yearsExperience < 3:
+    {
+      "fitScore": {
+        "overall": 25,           // MAXIMUM 25%
+        "experience": 0,         // FIXE à 0
+        "yearsExperience": X     // Valeur réelle
+      }
+    }
+
     CV à analyser:
     ${cvContent}
 
-    RÉPONDS STRICTEMENT AVEC CE FORMAT JSON SANS AUCUN TEXTE AVANT OU APRÈS:
-    {
-      "signauxAlerte": [
-        {
-          "type": "Type d'alerte",
-          "probleme": "Description du problème",
-          "severite": "faible"
-        }
-      ],
-      "resume": "Résumé global de l'analyse"
-    }
+    CV à analyser:
+    ${cvContent}
 
-    Note: Les valeurs acceptées pour la sévérité sont uniquement: "faible", "moyenne", ou "élevée".
-    `;
+    FORMAT DE RÉPONSE REQUIS:
+    {
+      "fitScore": {
+        "overall": 25,          // MAX 30% si pas d'expérience
+        "skills": [0-100],      // Score normal basé sur compétences
+        "experience": 0,        // DOIT être 0 si stages uniquement
+        "education": [0-100],   // Score normal basé sur formation
+        "yearsExperience": 0    // DOIT être 0 pour stages
+      },
+      "jobFitSummary": {
+        "isRecommended": false,   // TOUJOURS false si pas d'expérience
+        "fitLevel": "Low",       // TOUJOURS "Low" si pas d'expérience
+        "reason": "string",
+        "fitBreakdown": {
+          "skillsFit": {
+            "matchLevel": "string",
+            "details": []
+          },
+          "experienceFit": {
+            "matchLevel": "Weak",  // TOUJOURS "Weak" si pas d'expérience
+            "details": []
+          },
+          "educationFit": {
+            "matchLevel": "string",
+            "details": []
+          }
+        }
+      },
+      "recruiterRecommendations": {
+        "decision": "Reject",     // TOUJOURS "Reject" si pas d'expérience
+        "suggestedAction": "string",
+        "feedbackToSend": []
+      }
+    }`;
   }
 }

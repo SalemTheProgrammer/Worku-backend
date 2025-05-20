@@ -32,7 +32,6 @@ export class InterviewService {
   ) {}
 
   async scheduleInterview(scheduleDto: ScheduleInterviewDto): Promise<InterviewDocument> {
-    // Verify application exists and get candidate info
     const application = await this.applicationModel
       .findById(scheduleDto.applicationId)
       .populate<{ candidat: Candidate }>('candidat')
@@ -44,7 +43,6 @@ export class InterviewService {
       throw new NotFoundException('Application not found');
     }
 
-    // Validate interview type and required fields
     if (scheduleDto.type === 'Video' && !scheduleDto.meetingLink) {
       throw new BadRequestException('Meeting link is required for video interviews');
     }
@@ -52,7 +50,6 @@ export class InterviewService {
       throw new BadRequestException('Location is required for in-person interviews');
     }
 
-    // Create interview
     const interview: InterviewDocument = await this.interviewModel.create({
       applicationId: new Types.ObjectId(scheduleDto.applicationId),
       candidateId: application.candidat._id,
@@ -65,15 +62,12 @@ export class InterviewService {
       status: 'pending'
     });
 
-    // Generate confirmation link
     const confirmationToken = this.generateConfirmationToken(interview._id.toHexString());
     const confirmationLink = `${this.configService.get('APP_URL')}/interviews/confirm/${confirmationToken}`;
 
-    // Format date and time for email
     const formattedDate = format(new Date(scheduleDto.date), 'EEEE d MMMM yyyy', { locale: fr });
     const formattedTime = scheduleDto.time;
 
-    // Send confirmation email
     await this.emailService.sendInterviewConfirmation(
       application.candidat.email,
       {
@@ -112,8 +106,6 @@ export class InterviewService {
   }
 
   private generateConfirmationToken(interviewId: string): string {
-    // In a real application, use JWT or another secure token method
-    // This is a simplified example
     return Buffer.from(interviewId).toString('base64');
   }
 
@@ -145,7 +137,7 @@ export class InterviewService {
   async getAllScheduledCandidates(): Promise<ScheduledCandidate[]> {
     const interviews = await this.interviewModel
       .find({
-        status: { $in: ['pending', 'confirmed', 'future'] }
+        status: { $in: ['pending', 'confirmed'] }
       })
       .populate({
         path: 'applicationId',
@@ -164,15 +156,31 @@ export class InterviewService {
       .lean<PopulatedInterview[]>()
       .exec();
 
-    return interviews.map((interview: PopulatedInterview): ScheduledCandidate => ({
-      interviewId: interview._id.toString(),
-      candidateName: `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`,
-      candidateEmail: interview.applicationId.candidat.email,
-      jobTitle: interview.applicationId.poste.title,
-      status: interview.status,
-      scheduledDate: interview.date,
-      scheduledTime: interview.time
-    }));
+    return interviews.map((interview: PopulatedInterview): ScheduledCandidate => {
+      if (!interview.applicationId) {
+        return {
+          interviewId: interview._id.toString(),
+          candidateName: 'Unknown Candidate',
+          candidateEmail: 'No email available',
+          jobTitle: 'Unknown Position',
+          status: interview.status,
+          scheduledDate: interview.date,
+          scheduledTime: interview.time
+        };
+      }
+      
+      return {
+        interviewId: interview._id.toString(),
+        candidateName: interview.applicationId.candidat
+          ? `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`
+          : 'Unknown Candidate',
+        candidateEmail: interview.applicationId.candidat?.email || 'No email available',
+        jobTitle: interview.applicationId.poste?.title || 'Unknown Position',
+        status: interview.status,
+        scheduledDate: interview.date,
+        scheduledTime: interview.time
+      };
+    });
   }
 
   async addToFutureInterviews(addToInterviewsDto: AddToInterviewsDto): Promise<ScheduledCandidate> {
@@ -187,10 +195,23 @@ export class InterviewService {
       throw new NotFoundException('Application not found');
     }
 
-    const interview: InterviewDocument = await this.interviewModel.create({
+    const existingInterview = await this.interviewModel.findOne({
       applicationId: new Types.ObjectId(addToInterviewsDto.applicationId),
       candidateId: application.candidat._id,
       status: 'future'
+    });
+
+    if (existingInterview) {
+      throw new BadRequestException('Candidate already added to future interviews for this application');
+    }
+
+    const interview: InterviewDocument = await this.interviewModel.create({
+      applicationId: new Types.ObjectId(addToInterviewsDto.applicationId),
+      candidateId: application.candidat._id,
+      status: 'future',
+      type: undefined,
+      date: undefined,
+      time: undefined
     });
 
     return {
@@ -201,12 +222,15 @@ export class InterviewService {
       status: interview.status
     };
   }
+
   async getFutureCandidates(): Promise<ScheduledCandidate[]> {
-    const interviews = await this.interviewModel
+    // Find all interviews with future status
+    const futureInterviews = await this.interviewModel
       .find({
-        status: 'future'
+        status: 'future',
+        date: { $exists: false } // Only get unscheduled future interviews
       })
-      .populate({
+      .populate<{ applicationId: PopulatedApplication }>({
         path: 'applicationId',
         populate: [
           {
@@ -219,16 +243,45 @@ export class InterviewService {
           }
         ]
       })
-      .sort({ _id: -1 }) // Most recent first
+      .sort({ createdAt: -1 })
       .lean<PopulatedInterview[]>()
       .exec();
 
-    return interviews.map((interview: PopulatedInterview): ScheduledCandidate => ({
-      interviewId: interview._id.toString(),
-      candidateName: `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`,
-      candidateEmail: interview.applicationId.candidat.email,
-      jobTitle: interview.applicationId.poste.title,
-      status: interview.status
-    }));
+    // Find all scheduled interviews for future date
+    const scheduledInterviews = await this.interviewModel
+      .find({
+        status: { $in: ['pending', 'confirmed'] },
+        date: { $gt: new Date() }
+      })
+      .populate<{ applicationId: PopulatedApplication }>({
+        path: 'applicationId',
+        populate: [
+          {
+            path: 'candidat',
+            select: 'firstName lastName email'
+          },
+          {
+            path: 'poste',
+            select: 'title'
+          }
+        ]
+      })
+      .sort({ date: 1, time: 1 })
+      .lean<PopulatedInterview[]>()
+      .exec();
+
+    const allInterviews = [...futureInterviews, ...scheduledInterviews];
+
+    return allInterviews
+      .filter(interview => interview.applicationId && interview.applicationId.candidat)
+      .map((interview: PopulatedInterview): ScheduledCandidate => ({
+        interviewId: interview._id.toString(),
+        candidateName: `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`,
+        candidateEmail: interview.applicationId.candidat.email,
+        jobTitle: interview.applicationId.poste?.title || 'Unknown Position',
+        status: interview.status,
+        scheduledDate: interview.date,
+        scheduledTime: interview.time
+      }));
   }
 }

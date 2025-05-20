@@ -314,7 +314,10 @@ export class JobApplicationsController {
           decision: app.analyse?.recommandationsRecruteur?.décision || 'En attente',
           suggestedAction: app.analyse?.recommandationsRecruteur?.actionSuggérée || 'Analyse en cours',
           feedbackToSend: app.analyse?.recommandationsRecruteur?.retourCandidat || []
-        }
+        },
+        // Add the new fields
+        skills: app.candidat?.skills?.map(skill => skill.name) || [],
+        jobTitle: app.poste?.title || ''
       };
     } catch (error) {
       this.logger.error(`Error mapping application: ${error.message}`);

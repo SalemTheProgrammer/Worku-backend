@@ -1,6 +1,10 @@
 import { ConfigService } from '@nestjs/config';
+import { access, constants } from 'fs/promises';
+import { Logger } from '@nestjs/common';
 
 export class FileUtils {
+  private static readonly logger = new Logger('FileUtils');
+
   private static configService: ConfigService;
 
   static init(configService: ConfigService) {
@@ -40,6 +44,21 @@ export class FileUtils {
       return path.startsWith('/uploads/') ? path.substring(9) : null;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Checks if a file exists and is accessible
+   * @param filePath - The path of the file to check
+   * @returns Promise<boolean> - True if file is accessible, false otherwise
+   */
+  static async checkFileAccess(filePath: string): Promise<boolean> {
+    try {
+      await access(filePath, constants.F_OK | constants.R_OK);
+      return true;
+    } catch (error) {
+      this.logger.warn(`File access check failed for ${filePath}: ${error.message}`);
+      return false;
     }
   }
 }

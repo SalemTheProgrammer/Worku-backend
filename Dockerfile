@@ -37,11 +37,16 @@ COPY --from=builder /usr/src/app/dist ./dist
 # Optional: Copy env file for production
 COPY --from=builder /usr/src/app/.env.production ./.env.production
 
-# Optional: Create uploads folder if needed
-RUN mkdir -p uploads && chown -R node:node uploads
+# Create required directories with proper permissions
+RUN mkdir -p uploads logs && \
+    chown -R node:node /usr/src/app && \
+    chown -R node:node uploads logs
 
 # Run as non-root user
 USER node
+
+# Create volume mount points
+VOLUME ["/usr/src/app/uploads", "/usr/src/app/logs"]
 
 # Expose port used by NestJS (adjust if needed)
 EXPOSE 8080

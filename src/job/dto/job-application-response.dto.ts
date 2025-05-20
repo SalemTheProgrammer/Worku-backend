@@ -107,6 +107,12 @@ export class JobApplicationResponseDto {
 
   @ApiProperty({ description: 'Last analysis update time' })
   lastUpdated: Date;
+
+  @ApiProperty({ description: 'Candidate skills', type: [String] })
+  skills: string[];
+
+  @ApiProperty({ description: 'Job title' })
+  jobTitle: string;
 }
 
 export class JobApplicationsListResponseDto {

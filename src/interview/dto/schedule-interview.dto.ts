@@ -1,6 +1,7 @@
 import { IsNotEmpty, IsString, IsEnum, IsOptional, IsDateString, Matches } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('interviews')
 export class ScheduleInterviewDto {
   @ApiProperty({
     description: 'ID of the application',

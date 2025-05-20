@@ -121,9 +121,9 @@ export class AppModule implements NestModule {
       .exclude(
         { path: 'health', method: RequestMethod.ALL },
         { path: 'api', method: RequestMethod.ALL },
-        { path: 'uploads/(.*)', method: RequestMethod.GET },
-        { path: 'public/(.*)', method: RequestMethod.GET },
-        { path: 'assets/(.*)', method: RequestMethod.GET }
+        { path: 'uploads/*filePath', method: RequestMethod.GET },
+        { path: 'public/*filePath', method: RequestMethod.GET },
+        { path: 'assets/*filePath', method: RequestMethod.GET }
       )
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }

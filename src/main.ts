@@ -26,7 +26,18 @@ async function bootstrap() {
     const configService = app.get(ConfigService);
 
     // CORS must be enabled before any other middleware
-    const corsOrigins = ['http://localhost:4200'];
+    const corsOrigins = configService.get('CORS_ALLOWED_ORIGINS', '').split(',')
+      .filter(origin => origin)
+      .map(origin => origin.trim());
+      
+    if (corsOrigins.length === 0) {
+      // Fallback for development
+      corsOrigins.push(process.env.NODE_ENV === 'production'
+        ? 'https://your-frontend-domain.com'
+        : 'http://localhost:4200'
+      );
+    }
+
     app.enableCors({
       origin: corsOrigins,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
@@ -48,9 +59,14 @@ async function bootstrap() {
       prefix: '/uploads',
       setHeaders: (res) => {
         // Allow CORS for static files
-        const origin = process.env.NODE_ENV === 'production'
-          ? configService.get('CORS_ORIGIN', 'https://your-frontend-domain.com')
-          : 'http://localhost:4200';
+        const allowedOrigins = configService.get('CORS_ALLOWED_ORIGINS', '').split(',')
+          .filter(origin => origin)
+          .map(origin => origin.trim());
+        const origin = allowedOrigins.length > 0
+          ? allowedOrigins[0]
+          : process.env.NODE_ENV === 'production'
+            ? 'https://your-frontend-domain.com'
+            : 'http://localhost:4200';
         
         res.set('Access-Control-Allow-Origin', origin);
         res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -107,8 +123,10 @@ async function bootstrap() {
         .setVersion('1.0')
         .setContact('Worku Support', 'https://worku.com', 'support@worku.com')
         .setLicense('MIT', 'https://opensource.org/licenses/MIT')
-        .addServer('http://localhost:' + port, 'Local Development')
-        .addServer('https://api.worku.com', 'Production')
+        .addServer(process.env.NODE_ENV === 'production'
+          ? configService.get('API_URL', 'https://api.worku.com')
+          : `http://localhost:${port}`,
+          process.env.NODE_ENV === 'production' ? 'Production' : 'Local Development')
         .addTag('authentication', 'Authentication and authorization endpoints')
         .addTag('company', 'Company profile and management')
         .addTag('candidate', 'Candidate profile and management')
@@ -116,6 +134,7 @@ async function bootstrap() {
         .addTag('job', 'Job posting and application')
         .addTag('Profile Picture', 'Candidate profile picture management')
         .addTag('CV', 'Candidate CV management')
+        .addTag('interviews', 'Interview scheduling and management')
         .addBearerAuth()
         .build();
 

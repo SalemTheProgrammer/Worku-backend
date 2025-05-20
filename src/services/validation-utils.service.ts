@@ -5,6 +5,7 @@ interface FitScore {
   skills: number;
   experience: number;
   education: number;
+  yearsExperience: number; // Actual years of professional experience (excluding internships)
 }
 
 interface FitBreakdown {
@@ -48,26 +49,77 @@ interface ProfileSuggestionsResponseDto {
 @Injectable()
 export class ValidationUtilsService {
   isValidApplicationAnalysisResponse(response: any): response is ApplicationAnalysisResponse {
-    return (
-      response &&
-      this.isValidFitScore(response.fitScore) &&
-      this.isValidJobFitSummary(response.jobFitSummary) &&
-      this.isValidRecruiterRecommendations(response.recruiterRecommendations)
-    );
+    if (!response) return false;
+
+    // Validate fitScore first as other validations depend on it
+    if (!this.isValidFitScore(response.fitScore)) {
+      return false;
+    }
+
+    // Validate jobFitSummary
+    if (!this.isValidJobFitSummary(response.jobFitSummary)) {
+      return false;
+    }
+
+    // Validate recruiterRecommendations with fitScore context
+    if (!this.isValidRecruiterRecommendations(response.recruiterRecommendations, response.fitScore)) {
+      return false;
+    }
+
+    return true;
   }
 
   private isValidFitScore(score: any): score is FitScore {
-    return (
-      score &&
-      typeof score.overall === 'number' &&
-      typeof score.skills === 'number' &&
-      typeof score.experience === 'number' &&
-      typeof score.education === 'number' &&
-      score.overall >= 0 && score.overall <= 100 &&
-      score.skills >= 0 && score.skills <= 100 &&
-      score.experience >= 0 && score.experience <= 100 &&
-      score.education >= 0 && score.education <= 100
+    if (!score ||
+        typeof score.overall !== 'number' ||
+        typeof score.skills !== 'number' ||
+        typeof score.experience !== 'number' ||
+        typeof score.education !== 'number' ||
+        typeof score.yearsExperience !== 'number') {
+      return false;
+    }
+
+    // Fixed scoring rules for insufficient experience
+    if (score.yearsExperience === 0 || !score.yearsExperience) {
+      return (
+        score.overall === 25 &&
+        score.experience === 0
+      );
+    }
+
+    if (score.yearsExperience < 3) {
+      return (
+        score.overall <= 25 &&
+        score.experience === 0
+      );
+    }
+
+    // Basic range checks
+    if (score.overall < 0 || score.overall > 100 ||
+        score.skills < 0 || score.skills > 100 ||
+        score.experience < 0 || score.experience > 100 ||
+        score.education < 0 || score.education > 100) {
+      return false;
+    }
+
+    // Experience weight validation
+    const expectedOverall = (
+      (score.experience * 0.5) +  // Experience is 50%
+      (score.skills * 0.3) +      // Skills are 30%
+      (score.education * 0.2)     // Education is 20%
     );
+
+    // Allow for small rounding differences
+    if (Math.abs(score.overall - expectedOverall) > 1) {
+      return false;
+    }
+
+    // Enforce max 30% overall score if experience is insufficient
+    if (score.experience < 70 && score.overall > 30) {
+      return false;
+    }
+
+    return true;
   }
 
   private isValidFitBreakdown(breakdown: any): breakdown is FitBreakdown {
@@ -92,14 +144,27 @@ export class ValidationUtilsService {
     );
   }
 
-  private isValidRecruiterRecommendations(recommendations: any): recommendations is RecruiterRecommendations {
-    return (
-      recommendations &&
-      ['Hire', 'Consider', 'Reject'].includes(recommendations.decision) &&
-      typeof recommendations.suggestedAction === 'string' &&
-      Array.isArray(recommendations.feedbackToSend) &&
-      recommendations.feedbackToSend.every((feedback: any) => typeof feedback === 'string')
-    );
+  private isValidRecruiterRecommendations(recommendations: any, fitScore?: FitScore): recommendations is RecruiterRecommendations {
+    if (!recommendations ||
+        !['Hire', 'Consider', 'Reject'].includes(recommendations.decision) ||
+        typeof recommendations.suggestedAction !== 'string' ||
+        !Array.isArray(recommendations.feedbackToSend) ||
+        !recommendations.feedbackToSend.every((feedback: any) => typeof feedback === 'string')) {
+      return false;
+    }
+
+    // Strict rules for recommendations based on experience
+    if (!fitScore) return true;
+
+    // No experience or insufficient experience must be Reject
+    if (fitScore.yearsExperience === 0 || fitScore.yearsExperience < 3) {
+      if (recommendations.decision !== 'Reject' ||
+          !recommendations.feedbackToSend.some(f => f.includes('expérience'))) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   isValidProfileSuggestions(response: any): response is ProfileSuggestionsResponseDto {

@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  HttpException,
+  HttpStatus,
+  Logger
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, FilterQuery, PopulateOptions } from 'mongoose';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
 import { Job, JobDocument } from '../schemas/job.schema';
-import { Candidate } from '../schemas/candidate.schema';
-import { Company } from '../schemas/company.schema';
+import { Candidate, CandidateDocument } from '../schemas/candidate.schema';
+import { Company, CompanyDocument } from '../schemas/company.schema';
 import {
   ApplicationResponse,
   IApplicationService,
@@ -14,6 +20,7 @@ import { FilterApplicationsDto } from './dto/filter-applications.dto';
 import { EmailService } from '../email/email.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+
 @Injectable()
 export class ApplicationService implements IApplicationService {
   private readonly logger = new Logger(ApplicationService.name);
@@ -24,21 +31,65 @@ export class ApplicationService implements IApplicationService {
     @InjectModel(Job.name)
     private readonly jobModel: Model<JobDocument>,
     @InjectModel(Candidate.name)
-    private readonly candidateModel: Model<Candidate>,
+    private readonly candidateModel: Model<CandidateDocument>,
     @InjectModel(Company.name)
-    private readonly companyModel: Model<Company>,
+    private readonly companyModel: Model<CompanyDocument>,
     private readonly emailService: EmailService,
     @InjectQueue('application-analysis')
     private readonly analysisQueue: Queue
-  ) { }
+  ) {}
+
+  /**
+   * Delete a single application and remove its reference from the related job
+   */
+  async deleteApplication(id: string): Promise<void> {
+    const session = await this.applicationModel.startSession();
+    session.startTransaction();
+
+    try {
+      const application = await this.applicationModel
+        .findById(id)
+        .session(session);
+      if (!application) {
+        throw new NotFoundException(`Application ${id} not found`);
+      }
+
+      // Pull this application out of the job's applications array
+      await this.jobModel.findByIdAndUpdate(
+        application.poste,
+        { $pull: { applications: application._id } },
+        { session }
+      );
+
+      // Delete the application document
+      await this.applicationModel.findByIdAndDelete(id).session(session);
+
+      await session.commitTransaction();
+      this.logger.log(`Deleted application ${id}`);
+    } catch (error) {
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
+      this.logger.error(`Failed to delete application ${id}`, error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Error deleting application',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    } finally {
+      session.endSession();
+    }
+  }
 
   async deleteAllApplications(): Promise<{ deletedCount: number }> {
     try {
       const result = await this.applicationModel.deleteMany({}).exec();
-      this.logger.log(`Successfully deleted ${result.deletedCount} applications`);
+      this.logger.log(`Deleted ${result.deletedCount} applications`);
       return { deletedCount: result.deletedCount };
     } catch (error) {
-      this.logger.error('Error deleting applications:', error);
+      this.logger.error('Error deleting applications', error);
       throw new HttpException(
         'Error deleting applications',
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -46,48 +97,43 @@ export class ApplicationService implements IApplicationService {
     }
   }
 
-  async createApplication(candidateId: string, jobId: string): Promise<ApplicationResponse> {
-    console.log('\n=== NEW APPLICATION SUBMISSION ===');
-    console.log(`Time: ${new Date().toISOString()}`);
-    console.log(`Candidate: ${candidateId}`);
-    console.log(`Job: ${jobId}`);
-    console.log('================================\n');
-
+  async createApplication(
+    candidateId: string,
+    jobId: string
+  ): Promise<ApplicationResponse> {
     const session = await this.applicationModel.startSession();
     session.startTransaction();
 
     try {
-      const existingApplication = await this.applicationModel.findOne({
-        candidat: new Types.ObjectId(candidateId),
-        poste: new Types.ObjectId(jobId)
-      }).session(session);
+      this.logger.debug(`Creating application: candidate=${candidateId}, job=${jobId}`);
 
-      if (existingApplication) {
+      // Prevent duplicates
+      const exists = await this.applicationModel
+        .findOne({ candidat: candidateId, poste: jobId })
+        .session(session);
+      if (exists) {
         throw new HttpException(
           'You have already applied for this position',
           HttpStatus.BAD_REQUEST
         );
       }
 
+      // Validate job & candidate
       const [job, candidate] = await Promise.all([
         this.jobModel.findById(jobId).session(session),
         this.candidateModel.findById(candidateId).session(session)
       ]);
+      if (!job) throw new NotFoundException('Job posting not found');
+      if (!candidate) throw new NotFoundException('Candidate not found');
 
-      if (!job) {
-        throw new HttpException('Job posting not found', HttpStatus.NOT_FOUND);
-      }
-      if (!candidate) {
-        throw new HttpException('Candidate not found', HttpStatus.NOT_FOUND);
-      }
+      // Validate company
+      const company = await this.companyModel
+        .findById(job.companyId)
+        .session(session);
+      if (!company) throw new NotFoundException('Company not found');
 
-      const company = await this.companyModel.findById(job.companyId).session(session);
-      if (!company) {
-        throw new HttpException('Company not found', HttpStatus.NOT_FOUND);
-      }
-
-      // Initialize with analysis pending status
-      const applicationData = {
+      // Build the application record
+      const applicationData: Partial<ApplicationDocument> = {
         candidat: new Types.ObjectId(candidateId),
         poste: new Types.ObjectId(jobId),
         companyId: job.companyId,
@@ -122,77 +168,33 @@ export class ApplicationService implements IApplicationService {
         }
       };
 
-      const newApplication = await this.applicationModel.create([applicationData], { session });
-      const createdApp = newApplication[0];
+      // Persist it
+      const [created] = await this.applicationModel.create(
+        [applicationData],
+        { session }
+      );
 
+      // Link candidate on the job document
       await this.jobModel.findByIdAndUpdate(
         jobId,
-        { $addToSet: { applications: new Types.ObjectId(candidateId) } },
+        { $addToSet: { applications: created._id } },
         { session }
       );
 
       await session.commitTransaction();
-      console.log('\n✅ Application saved successfully');
-      console.log(`Application ID: ${createdApp._id}`);
-      console.log('Starting background tasks...\n');
+      this.logger.log(`Application ${created._id} saved`);
 
-      // Queue background tasks
-      setImmediate(async () => {
-        // console.log('📧 Sending confirmation email...');
-        try {
-          // await this.emailService.sendApplicationConfirmation(candidate.email, {
-          //   jobTitle: job.title,
-          //   companyName: company.nomEntreprise
-          // });
-
-          // console.log('✉️ Confirmation email sent');
-          console.log('\n🔄 Checking Redis connection...');
-          const queueHealth = await this.analysisQueue.isReady();
-          if (!queueHealth) {
-            throw new Error('Analysis queue is not ready');
-          }
-          console.log('✅ Queue is ready');
-
-          // console.log('🔄 Queueing analysis job...');
-          // const jobCounts = await this.analysisQueue.getJobCounts();
-          // console.log('Current Queue Status:', {
-          //   waiting: jobCounts.waiting,
-          //   active: jobCounts.active,
-          //   completed: jobCounts.completed,
-          //   failed: jobCounts.failed
-          // });
-
-          // const analysisJob = await this.analysisQueue.add(
-          //   'analyze',
-          //   {
-          //     applicationId: createdApp._id.toString()
-          //   },
-          //   {
-          //     attempts: 3,
-          //     backoff: {
-          //       type: 'exponential',
-          //       delay: 1000
-          //     },
-          //     timeout: 300000 // 5 minutes
-          //   }
-          // );
-          
-          // console.log(`✅ Analysis job queued with ID: ${analysisJob.id}`);
-        } catch (error) {
-          console.error('\n❌ Error in background tasks:', error);
-          console.error('========================\n');
-        }
+      // Enqueue analysis job
+      await this.analysisQueue.add('analyze', {
+        applicationId: created._id.toString()
       });
 
-      return { id: createdApp._id.toString() };
-
+      return { id: created._id.toString() };
     } catch (error) {
       if (session.inTransaction()) {
         await session.abortTransaction();
       }
-      console.error('\n❌ Error creating application:');
-      console.error(error);
-      console.error('========================\n');
+      this.logger.error('Failed to create application', error);
       throw error;
     } finally {
       session.endSession();
@@ -200,109 +202,95 @@ export class ApplicationService implements IApplicationService {
   }
 
   async getApplicationById(id: string): Promise<ApplicationDocument> {
-    const application = await this.applicationModel.findById(id)
+    const application = await this.applicationModel
+      .findById(id)
       .populate('candidat')
       .populate('poste')
       .populate('companyId')
+      .lean()
       .exec();
 
     if (!application) {
-      throw new NotFoundException(`Application with ID ${id} not found`);
+      throw new NotFoundException(`Application ${id} not found`);
     }
-
-    return application;
-  }
-
-  async getApplicationsByCandidate(candidateId: string): Promise<ApplicationDocument[]> {
-    return await this.applicationModel.find({ 
-      candidat: new Types.ObjectId(candidateId) 
-    })
-      .populate('poste')
-      .populate('companyId')
-      .sort({ datePostulation: -1 })
-      .exec();
-  }
-
-  async getApplicationsByCompany(
-    companyId: string,
+    return application as any;
+  }  async getApplicationsByCandidate(
+    candidateId: string,
     filters?: FilterApplicationsDto
   ): Promise<GetApplicationsResult> {
+    return this.findWithFilters(
+      { candidat: new Types.ObjectId(candidateId) },
+      filters || { sortOrder: 'desc' },
+      [
+        { path: 'candidat', select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience' },
+        { path: 'poste', select: 'title _id' },
+        { path: 'companyId', select: '_id' }
+      ]
+    );
+  }
+
+  private async findWithFilters(
+    baseQuery: FilterQuery<ApplicationDocument>,
+    filters: FilterApplicationsDto,
+    populateOpts: (string | PopulateOptions)[]
+  ): Promise<GetApplicationsResult> {
+    const limitVal: number = filters.limit ?? 5;
+    const skipVal: number = filters.skip ?? 0;
+    const sortDir: 1 | -1 = filters.sortOrder === 'asc' ? 1 : -1;
+
     try {
-      const query: any = { companyId: new Types.ObjectId(companyId) };
-      
-      if (filters?.jobId) {
-        query.poste = new Types.ObjectId(filters.jobId);
-      }
-
-      const limit = filters?.limit || 5;
-      const skip = filters?.skip || 0;
-      const sortDirection = filters?.sortOrder === 'asc' ? 1 : -1;
-
       const [applications, total] = await Promise.all([
-        this.applicationModel.find(query)
-          .populate('candidat')
-          .populate('poste')
-          .sort({ datePostulation: sortDirection })
-          .skip(skip)
-          .limit(limit)
+        this.applicationModel
+          .find(baseQuery)
+          .populate(populateOpts)
+          .sort({ datePostulation: sortDir })
+          .skip(skipVal)
+          .limit(limitVal)
+          .lean()
           .exec(),
-        this.applicationModel.countDocuments(query)
+        this.applicationModel.countDocuments(baseQuery)
       ]);
 
-      return {
-        applications,
-        total
-      };
-    } catch (error) {
-      this.logger.error(`Error getting applications for company ${companyId}:`, error);
+      return { applications, total };
+    } catch (err) {
+      this.logger.error('Error in findWithFilters', err);
       throw new HttpException(
-        'Error retrieving company applications',
+        'Error retrieving applications',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+  async getApplicationsByCompany(
+    companyId: string,
+    filters: FilterApplicationsDto
+  ): Promise<GetApplicationsResult> {
+    const query: any = { companyId: new Types.ObjectId(companyId) };
+    if (filters.jobId) {
+      query.poste = new Types.ObjectId(filters.jobId);
+    }
+    return this.findWithFilters(query, filters, [
+      { path: 'candidat', select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience' },
+      { path: 'poste', select: 'title _id' },
+      { path: 'companyId', select: '_id' }
+    ]);
   }
 
   async getApplicationsByJob(
     jobId: string,
-    filters?: FilterApplicationsDto
+    filters: FilterApplicationsDto
   ): Promise<GetApplicationsResult> {
-    try {
-      const job = await this.jobModel.findById(jobId).exec();
-      if (!job) {
-        throw new NotFoundException(`Job with ID ${jobId} not found`);
-      }
-
-      const query = { poste: new Types.ObjectId(jobId) };
-      const limit = filters?.limit || 5;
-      const skip = filters?.skip || 0;
-      const sortDirection = filters?.sortOrder === 'asc' ? 1 : -1;
-
-      const [applications, total] = await Promise.all([
-        this.applicationModel.find(query)
-          .populate({
-            path: 'candidat',
-            select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience'
-          })
-          .populate('poste')
-          .populate('companyId')
-          .sort({ datePostulation: sortDirection })
-          .skip(skip)
-          .limit(limit)
-          .lean()
-          .exec(),
-        this.applicationModel.countDocuments(query)
-      ]);
-
-      return {
-        applications,
-        total
-      };
-    } catch (error) {
-      this.logger.error(`Error getting applications for job ${jobId}:`, error);
-      throw new HttpException(
-        'Error retrieving job applications',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+    const exists = await this.jobModel.exists({ _id: jobId });
+    if (!exists) {
+      throw new NotFoundException(`Job ${jobId} not found`);
     }
+    return this.findWithFilters(
+      { poste: new Types.ObjectId(jobId) },
+      filters,
+      [
+        { path: 'candidat', select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience' },
+        { path: 'poste', select: 'title _id' },
+        { path: 'companyId', select: '_id' }
+      ]
+    );
   }
 }

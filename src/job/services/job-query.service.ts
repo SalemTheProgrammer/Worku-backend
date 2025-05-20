@@ -8,11 +8,9 @@ export class JobQueryService {
   buildQuery(filters: FilterJobsDto): Record<string, any> {
     const query: Record<string, any> = {};
 
-    // Base query with isActive condition
-    query.isActive = true;
-
-    // Only add expiresAt condition if onlyActive is true or not specified
+    // Only add active and expiry conditions if not explicitly disabled
     if (!filters || filters?.onlyActive !== false) {
+      query.isActive = true;
       query.expiresAt = { $gt: new Date() };
     }
 

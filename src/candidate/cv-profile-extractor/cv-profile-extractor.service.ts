@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Candidate } from '../../schemas/candidate.schema';
@@ -6,6 +6,9 @@ import { GeminiClientService } from '../../services/gemini-client.service';
 import { SkillCategory } from '../enums/skill-category.enum';
 import * as mongoose from 'mongoose';
 import * as path from 'path';
+import { promises as fs } from 'fs';
+import { FileUtils } from '../../common/utils/file.utils';
+import pdfParse from 'pdf-parse';
 
 interface ExtractedProfile {
   education?: Array<{
@@ -67,17 +70,25 @@ export class CvProfileExtractorService {
       const absolutePath = path.isAbsolute(cvPath) ? cvPath : path.resolve(cvPath);
       this.logger.log(`Using CV path: ${absolutePath}`);
 
-      // Directly extract text from the PDF file
-      const pdfParse = require('pdf-parse');
-      const fs = require('fs');
+      // Check if file exists and is accessible
+      const isAccessible = await FileUtils.checkFileAccess(absolutePath);
+      if (!isAccessible) {
+        throw new InternalServerErrorException(`CV file is not accessible: ${absolutePath}`);
+      }
+
+      // Extract text from PDF using async operations
       let cvText = '';
       try {
-        const dataBuffer = fs.readFileSync(absolutePath);
+        const dataBuffer = await fs.readFile(absolutePath);
         const data = await pdfParse(dataBuffer);
         cvText = data.text;
       } catch (err) {
-        this.logger.error(`Failed to extract text from CV PDF for candidate ${candidateId}: ${err.message}`);
-        return false;
+        this.logger.error(`Failed to extract text from CV PDF for candidate ${candidateId}`, {
+          error: err.message,
+          path: absolutePath,
+          candidateId
+        });
+        throw new InternalServerErrorException('Failed to extract text from CV file');
       }
 
       this.logger.log(`Successfully extracted CV text: ${cvText.substring(0, 100)}...`);
@@ -116,7 +127,14 @@ export class CvProfileExtractorService {
       const prompt = this.buildProfileExtractionPrompt(cvContent);
       this.logger.log('Sending prompt to Gemini for profile extraction');
       
-      const response = await this.geminiClient.generateContent(prompt);
+      const response = await this.geminiClient.generateContent(prompt)
+        .catch(error => {
+          this.logger.error('Failed to generate content from Gemini API', {
+            error: error.message,
+            Candidate
+          });
+          throw new InternalServerErrorException('Failed to analyze CV content');
+        });
       this.logger.log(`Received full response from Gemini: ${response}`);
       this.logger.log(`Received response from Gemini: ${response.substring(0, 100)}...`);
       

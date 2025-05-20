@@ -14,10 +14,9 @@ export interface GetApplicationsResult {
   total: number;
 }
 
-export interface IApplicationService {
-  createApplication(candidateId: string, jobId: string): Promise<ApplicationResponse>;
+export interface IApplicationService {  createApplication(candidateId: string, jobId: string): Promise<ApplicationResponse>;
   getApplicationById(id: string): Promise<ApplicationDocument>;
-  getApplicationsByCandidate(candidateId: string): Promise<ApplicationDocument[]>;
+  getApplicationsByCandidate(candidateId: string, filters?: FilterApplicationsDto): Promise<GetApplicationsResult>;
   getApplicationsByCompany(companyId: string, filters?: FilterApplicationsDto): Promise<GetApplicationsResult>;
   getApplicationsByJob(jobId: string, filters?: FilterApplicationsDto): Promise<GetApplicationsResult>;
 }

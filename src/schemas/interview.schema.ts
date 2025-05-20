@@ -13,13 +13,13 @@ export class Interview {
   @Prop({ type: Types.ObjectId, ref: 'Candidate', required: true })
   candidateId: Types.ObjectId;
 
-  @Prop({ required: true })
+  @Prop()
   date: Date;
 
-  @Prop({ required: true })
+  @Prop()
   time: string;
 
-  @Prop({ required: true, enum: ['Video', 'InPerson', 'Phone'] })
+  @Prop({ enum: ['Video', 'InPerson', 'Phone'] })
   type: string;
 
   @Prop()
@@ -28,7 +28,7 @@ export class Interview {
   @Prop()
   meetingLink?: string;
 
-  @Prop({ default: 'pending', enum: ['pending', 'confirmed', 'declined', 'completed', 'cancelled'] })
+  @Prop({ enum: ['pending', 'confirmed', 'declined', 'completed', 'cancelled', 'future'], default: 'future' })
   status: string;
 
   @Prop()
