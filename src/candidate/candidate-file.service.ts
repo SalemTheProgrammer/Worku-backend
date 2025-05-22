@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import * as mongoose from 'mongoose';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Candidate, CandidateDocument } from '../schemas/candidate.schema';
@@ -8,6 +9,7 @@ import { CVAnalysisService } from '../services/cv-analysis.service';
 import { ImageAnalysisService } from '../services/image-analysis.service';
 import { CvAnalysisQueue } from './cv-analysis.queue';
 import { CvSkillsService } from './services/cv-skills.service';
+import { CvAnalysisResponseDto } from './dto/cv-analysis.dto';
 
 @Injectable()
 export class CandidateFileService {
@@ -89,15 +91,37 @@ export class CandidateFileService {
     candidate.cvUrl = newRelativePath;
     // Initialize empty skills array with valid proficiency levels
     candidate.skills = [];
+    
+    // Ensure there's at least one valid education entry with all required fields
+    if (!candidate.education || candidate.education.length === 0) {
+      candidate.education = [{
+        _id: new mongoose.Types.ObjectId().toString(),
+        institution: 'Non spécifié',
+        degree: 'Non spécifié',
+        fieldOfStudy: 'Non spécifié', // Critical field that's causing validation errors
+        startDate: new Date()
+      }];
+    } else {
+      // Validate all existing education entries
+      candidate.education = candidate.education.map(edu => {
+        if (!edu.fieldOfStudy) edu.fieldOfStudy = 'Non spécifié';
+        if (!edu.institution) edu.institution = 'Non spécifié';
+        if (!edu.degree) edu.degree = 'Non spécifié';
+        if (!edu.startDate) edu.startDate = new Date();
+        return edu;
+      });
+    }
+    
     await candidate.save();
 
     try {
       // Basic validation of file format
       await fs.access(absolutePath);
       
-      // Queue CV analysis for background processing
+      // Queue both CV analysis and profile extraction jobs for background processing
       await this.cvAnalysisQueue.addCvAnalysisJob(absolutePath, userId);
-      this.logger.log(`Queued CV analysis and skill extraction for candidate ${userId}`);
+      await this.cvAnalysisQueue.addProfileExtractionJob(absolutePath, userId);
+      this.logger.log(`Queued CV analysis, skill extraction, and profile extraction for candidate ${userId}`);
     } catch (error) {
       // If validation fails, clean up and throw error
       await this.safeUnlink(absolutePath);
@@ -149,13 +173,40 @@ export class CandidateFileService {
   }
 
   async analyzeCV(userId: string): Promise<any> {
+    this.logger.debug(`Starting CV analysis for user ${userId}`);
     const candidate = await this.findCandidate(userId);
     if (!candidate.cvUrl) {
+      this.logger.warn(`No CV found for user ${userId}`);
       throw new NotFoundException('No CV found for analysis.');
     }
 
-    const absolutePath = path.resolve(candidate.cvUrl);
-    return await this.cvAnalysisService.analyzeCV(absolutePath);
+    try {
+      const absolutePath = path.resolve(candidate.cvUrl);
+      this.logger.debug(`CV path resolved: ${absolutePath}`);
+      
+      // Verify file exists and is accessible
+      await fs.access(absolutePath);
+      this.logger.debug(`CV file exists and is accessible at ${absolutePath}`);
+      
+      // Get file stats to check size
+      const fileStats = await fs.stat(absolutePath);
+      this.logger.debug(`CV file size: ${fileStats.size} bytes`);
+      
+      if (fileStats.size === 0) {
+        this.logger.warn(`CV file is empty for user ${userId}`);
+        throw new HttpException('CV file is empty', HttpStatus.BAD_REQUEST);
+      }
+      
+      const result = await this.cvAnalysisService.analyzeCV(absolutePath);
+      this.logger.debug(`CV analysis completed successfully for user ${userId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Error during CV analysis for user ${userId}: ${error.message}`, error.stack);
+      if (error instanceof NotFoundException || error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException('Error analyzing CV: ' + error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   // --- CV Image Methods ---
@@ -187,5 +238,48 @@ export class CandidateFileService {
 
     const absolutePath = path.resolve(candidate.cvImageUrl);
     return await this.imageAnalysisService.analyzeResumeImage(absolutePath);
+  }
+
+  /**
+   * Analyzes the CV content and provides feedback about the CV itself,
+   * such as formatting issues, inconsistencies, and improvement suggestions.
+   * This is different from job matching analysis.
+   */
+  async analyzeCVContent(userId: string): Promise<CvAnalysisResponseDto> {
+    this.logger.debug(`Starting CV content analysis for user ${userId}`);
+    const candidate = await this.findCandidate(userId);
+    if (!candidate.cvUrl) {
+      this.logger.warn(`No CV found for user ${userId}`);
+      throw new NotFoundException('No CV found for analysis.');
+    }
+
+    try {
+      const absolutePath = path.resolve(candidate.cvUrl);
+      this.logger.debug(`CV path resolved: ${absolutePath}`);
+      
+      // Verify file exists and is accessible
+      await fs.access(absolutePath);
+      this.logger.debug(`CV file exists and is accessible at ${absolutePath}`);
+      
+      // Get file stats to check size
+      const fileStats = await fs.stat(absolutePath);
+      this.logger.debug(`CV file size: ${fileStats.size} bytes`);
+      
+      if (fileStats.size === 0) {
+        this.logger.warn(`CV file is empty for user ${userId}`);
+        throw new HttpException('CV file is empty', HttpStatus.BAD_REQUEST);
+      }
+      
+      // Pass the file to the CV analysis service for content feedback
+      const result = await this.cvAnalysisService.analyzeCVContent(absolutePath);
+      this.logger.debug(`CV content analysis completed successfully for user ${userId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Error during CV content analysis for user ${userId}: ${error.message}`, error.stack);
+      if (error instanceof NotFoundException || error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException('Error analyzing CV content: ' + error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }

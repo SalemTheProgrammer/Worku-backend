@@ -5,7 +5,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Job, JobSchema } from '../schemas/job.schema';
 import { ApplicationAnalysisProcessor } from './jobs/application-analysis.processor';
-import { JobMatchAnalysisService } from './job-match-analysis.service';
+import { JobMatchAnalysisWrapperService } from './job-match-analysis-wrapper.service';
+import { JobMatchModule } from './job-match/job-match.module';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
 import { GeminiModule } from '../services/gemini.module';
 import { EmailModule } from '../email/email.module';
@@ -44,10 +45,11 @@ import { Queue } from 'bull';
     ]),
     GeminiModule,
     EmailModule,
+    JobMatchModule,
   ],
   providers: [
     ApplicationAnalysisProcessor,
-    JobMatchAnalysisService,
+    JobMatchAnalysisWrapperService,
     ConfigService,
   ],
   exports: [BullModule],

@@ -13,6 +13,7 @@ import { CompanyAuthService } from './company-auth.service';
 import { CompanyProfileService } from './company-profile.service';
 import { InvitedUsersService } from './invited-users.service';
 import { EmailModule } from 'src/email/email.module';
+import { JournalModule } from '../journal/journal.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { EmailModule } from 'src/email/email.module';
     OtpModule,
     AuthModule,
     EmailModule,
+    JournalModule,
   ],
   controllers: [
     CompanyController,

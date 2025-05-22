@@ -64,6 +64,25 @@ export class EmailService {
     await this.sendEmail(email, subject, html);
   }
 
+  /**
+   * Send a rejection email to a candidate
+   * @param email Candidate's email
+   * @param subject Email subject
+   * @param html Email HTML content
+   */
+  async sendRejectionEmail(email: string, subject: string, html: string): Promise<void> {
+    try {
+      await this.sendEmail(email, subject, html);
+      this.logger.log(`Rejection email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send rejection email to ${email}: ${error.message}`);
+      throw new HttpException(
+        'Failed to send rejection email',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
     if (!this.isEmailEnabled) {
       this.logger.log(`[Email Disabled] Would send email to ${to} with subject: ${subject}`);

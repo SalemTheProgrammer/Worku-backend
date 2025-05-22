@@ -6,16 +6,16 @@ export class Education {
   @Prop({ type: String })
   _id: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, default: 'Non spécifié' })
   institution: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, default: 'Non spécifié' })
   degree: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false, default: 'Non spécifié' })
   fieldOfStudy: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, default: () => new Date() })
   startDate: Date;
 
   @Prop()

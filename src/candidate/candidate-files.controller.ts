@@ -214,31 +214,100 @@ export class CandidateFilesController {
 
   @Post('profile/cv/analyze')
   @ApiTags('CV')
-  @ApiOperation({ summary: 'Analyze CV with Gemini AI' })
+  @ApiOperation({ summary: 'Analyze CV content and provide feedback' })
   @ApiResponse({
-    status: 200,
-    description: 'CV analysis completed successfully.',
+    status: 201,
+    description: 'CV content analysis completed successfully.',
     schema: {
       type: 'object',
       properties: {
-        signauxAlerte: {
+        summary: {
+          type: 'object',
+          properties: {
+            overallAssessment: { type: 'string' },
+            generalFeedback: { type: 'string' },
+            quality: { type: 'number' }
+          }
+        },
+        strengths: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              type: { type: 'string' },
-              probleme: { type: 'string' },
-              severite: { type: 'string' }
+              aspect: { type: 'string' },
+              details: { type: 'string' }
             }
           }
         },
-        resume: { type: 'string' }
+        formattingFeedback: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              section: { type: 'string' },
+              issue: { type: 'string' },
+              recommendation: { type: 'string' },
+              severity: { type: 'string' }
+            }
+          }
+        },
+        contentFeedback: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              section: { type: 'string' },
+              issue: { type: 'string' },
+              recommendation: { type: 'string' },
+              severity: { type: 'string' }
+            }
+          }
+        },
+        improvementSuggestions: {
+          type: 'array',
+          items: { type: 'string' }
+        }
       }
     }
   })
   @ApiResponse({ status: 404, description: 'CV not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async analyzeCV(@Request() req: RequestWithUser) {
+    try {
+      const analysis = await this.candidateFileService.analyzeCVContent(req.user.userId);
+      return analysis;
+    } catch (error) {
+      throw new HttpException(error.message, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('profile/cv/job-match')
+  @ApiTags('CV')
+  @ApiOperation({ summary: 'Analyze CV for job matching scores' })
+  @ApiResponse({
+    status: 201,
+    description: 'CV job matching analysis completed successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        fitScore: {
+          type: 'object',
+          properties: {
+            overall: { type: 'number' },
+            skills: { type: 'number' },
+            experience: { type: 'number' },
+            education: { type: 'number' },
+            yearsExperience: { type: 'number' }
+          }
+        },
+        jobFitSummary: { type: 'object' },
+        recruiterRecommendations: { type: 'object' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'CV not found.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async analyzeJobMatch(@Request() req: RequestWithUser) {
     try {
       const analysis = await this.candidateFileService.analyzeCV(req.user.userId);
       return analysis;

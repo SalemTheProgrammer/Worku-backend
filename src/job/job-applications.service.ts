@@ -26,7 +26,11 @@ export class JobApplicationsService {
       throw new UnauthorizedException('You are not authorized to view these applications');
     }
 
-    const applications = await this.applicationModel.find({ poste: jobId })
+    // Modified to filter out rejected applications
+    const applications = await this.applicationModel.find({ 
+      poste: jobId,
+      isRejected: { $ne: true } // Exclude rejected applications
+    })
       .populate({
         path: 'candidat',
         select: 'firstName lastName email phone location profileImage cv title yearsOfExperience skills professionalStatus employmentStatus education',

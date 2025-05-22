@@ -34,6 +34,9 @@ export class Application {
   })
   statut: string;
 
+  @Prop({ type: Boolean, default: false })
+  isRejected: boolean;
+
   @Prop({
     type: {
       scoreDAdéquation: {
@@ -45,6 +48,16 @@ export class Application {
       },
       matchedKeywords: [String],
       highlightsToStandOut: [String],
+      marchéTunisien: {
+        fourchetteSalariale: {
+          min: Number,
+          max: Number,
+          devise: String
+        },
+        potentielDEmbauche: String,
+        compétencesDemandées: [String],
+        tempsEstiméRecrutement: String
+      },
       synthèseAdéquation: {
         recommandé: Boolean,
         niveauAdéquation: String,
@@ -102,6 +115,16 @@ export class Application {
     };
     matchedKeywords: string[];
     highlightsToStandOut: string[];
+    marchéTunisien?: {
+      fourchetteSalariale: {
+        min: number;
+        max: number;
+        devise: string;
+      };
+      potentielDEmbauche: string;
+      compétencesDemandées: string[];
+      tempsEstiméRecrutement: string;
+    };
     synthèseAdéquation: {
       recommandé: boolean;
       niveauAdéquation: string;
@@ -136,3 +159,6 @@ export class Application {
 }
 
 export const ApplicationSchema = SchemaFactory.createForClass(Application);
+
+// Add index on isRejected field for better query performance
+ApplicationSchema.index({ isRejected: 1 });

@@ -79,6 +79,73 @@ export class JobMatchAnalysisService {
       .filter(Boolean);
   }
 
+  // Calculate estimated salary range based on Tunisian market
+  private calculateTunisianSalaryRange(
+    yearsOfExperience: number,
+    skills: string[],
+    education: string,
+    jobLevel: string
+  ): { min: number; max: number; currency: string } {
+    // Base salary ranges for Tunisia (in TND)
+    const baseSalaryByLevel = {
+      junior: { min: 800, max: 1500 },
+      midLevel: { min: 1500, max: 2500 },
+      senior: { min: 2500, max: 4000 },
+      expert: { min: 4000, max: 5000 }
+    };
+
+    // Determine level based on experience
+    let level = 'junior';
+    if (yearsOfExperience >= 7) {
+      level = 'expert';
+    } else if (yearsOfExperience >= 4) {
+      level = 'senior';
+    } else if (yearsOfExperience >= 2) {
+      level = 'midLevel';
+    }
+
+    // Get base salary for the level
+    let { min, max } = baseSalaryByLevel[level];
+
+    // Adjust for education
+    if (education?.toLowerCase().includes('master') || education?.toLowerCase().includes('mba')) {
+      min += 300;
+      max += 500;
+    } else if (education?.toLowerCase().includes('phd') || education?.toLowerCase().includes('doctorat')) {
+      min += 500;
+      max += 1000;
+    }
+
+    // Adjust for high-demand skills (simplified)
+    const highDemandSkills = [
+      'javascript', 'typescript', 'react', 'angular', 'vue', 'node', 'python', 'java',
+      'devops', 'cloud', 'aws', 'azure', 'docker', 'kubernetes', 'data science', 'machine learning',
+      'ai', 'blockchain', 'security', 'mongodb', 'mongoose', 'nosql'
+    ];
+
+    const highDemandSkillCount = skills.filter(skill => 
+      highDemandSkills.some(hds => skill.toLowerCase().includes(hds))
+    ).length;
+
+    if (highDemandSkillCount >= 3) {
+      min += 400;
+      max += 800;
+    } else if (highDemandSkillCount >= 1) {
+      min += 200;
+      max += 400;
+    }
+
+    // Job level adjustments
+    if (jobLevel?.toLowerCase().includes('lead') || jobLevel?.toLowerCase().includes('senior')) {
+      min += 300;
+      max += 600;
+    } else if (jobLevel?.toLowerCase().includes('manager') || jobLevel?.toLowerCase().includes('director')) {
+      min += 800;
+      max += 1500;
+    }
+
+    return { min, max, currency: 'TND' };
+  }
 
   async analyzeMatch(candidateId: string, jobId: string): Promise<JobMatchResponse> {
     this.logger.log('========== JOB MATCH ANALYSIS ==========');
@@ -103,8 +170,56 @@ export class JobMatchAnalysisService {
       throw new Error('Candidate not found');
     }
     
+    // Enhanced keyword matching for both directions (candidate skills in job, job skills in candidate)
+    this.logger.log('Performing enhanced keyword matching...');
+    const candidateSkillsLower = candidate.skills?.map((s: any) => s.name.toLowerCase()) || [];
+    const jobSkillsRaw = job.requirements?.hardSkills?.split(',') || [];
+    const jobSkillsLower = jobSkillsRaw.map(s => s.trim().toLowerCase());
+    
+    // Pre-match to enhance the prompt with potential keyword matches
+    const potentialMatches: string[] = [];
+    
+    // Check each candidate skill against job skills
+    candidateSkillsLower.forEach(candidateSkill => {
+      jobSkillsLower.forEach(jobSkill => {
+        try {
+          // Check for partial matches in both directions
+          if (candidateSkill && jobSkill &&
+              (candidateSkill.includes(jobSkill) || jobSkill.includes(candidateSkill))) {
+            potentialMatches.push(candidateSkill);
+          }
+        } catch (error) {
+          this.logger.warn(`Error matching skills: ${error.message}`);
+        }
+        
+        // Check for technology variants
+        const techVariants = {
+          'mongodb': ['mongo', 'nosql'],
+          'mongoose': ['mongodb', 'orm'],
+          'javascript': ['js', 'ecmascript'],
+          'typescript': ['ts'],
+          'reactjs': ['react'],
+          'nodejs': ['node'],
+          'expressjs': ['express']
+        };
+        
+        // Check all variants
+        Object.entries(techVariants).forEach(([tech, variants]) => {
+          try {
+            if ((candidateSkill.includes(tech) && variants.some(v => jobSkill.includes(v))) ||
+                (jobSkill.includes(tech) && variants.some(v => candidateSkill.includes(v)))) {
+              potentialMatches.push(candidateSkill);
+            }
+          } catch (error) {
+            this.logger.warn(`Error matching tech variants: ${error.message}`);
+          }
+        });
+      });
+    });
+    
+    this.logger.log(`Found ${potentialMatches.length} potential skill matches`);
     this.logger.log('\n1️⃣ Creating job matching prompt...');
-    const prompt = this.createJobMatchingPrompt(job, candidate);
+    const prompt = this.createJobMatchingPrompt(job, candidate, [...new Set(potentialMatches)]);
     
     let attempt = 0;
     let parsedResponse: any = null;
@@ -187,6 +302,18 @@ export class JobMatchAnalysisService {
           score: typeof alert.score === 'number' ? alert.score : 0
         };
       });
+
+      // Calculate salary range based on Tunisian market
+      const candidateSkills = candidate.skills?.map((s: any) => s.name) || [];
+      const candidateEducation = candidate.education?.map((e: any) => e.degree).join(', ') || '';
+      const yearsOfExperience = candidate.yearsOfExperience || 0;
+      
+      const tunisianSalaryRange = this.calculateTunisianSalaryRange(
+        yearsOfExperience,
+        candidateSkills,
+        candidateEducation,
+        job.title
+      );
       
       const analysisData = {
         analyse: {
@@ -200,6 +327,18 @@ export class JobMatchAnalysisService {
           matchedKeywords: validatedResponse.resume.matchedKeywords || [],
           highlightsToStandOut: validatedResponse.resume.highlightsToStandOut || [],
           signauxAlerte: formattedSignalAlerts,
+          marchéTunisien: {
+            fourchetteSalariale: {
+              min: tunisianSalaryRange.min,
+              max: tunisianSalaryRange.max,
+              devise: tunisianSalaryRange.currency
+            },
+            potentielDEmbauche: validatedResponse.resume.score >= 65 ? 'Élevé' : 
+                               validatedResponse.resume.score >= 50 ? 'Moyen' : 'Faible',
+            compétencesDemandées: candidateSkills,
+            tempsEstiméRecrutement: validatedResponse.resume.score >= 75 ? '1-2 semaines' : 
+                                  validatedResponse.resume.score >= 60 ? '2-4 semaines' : '4+ semaines'
+          },
           synthèseAdéquation: {
             recommandé: validatedResponse.resume.score > 50,
             niveauAdéquation: this.getNiveauAdequation(validatedResponse.resume.score),
@@ -226,6 +365,7 @@ export class JobMatchAnalysisService {
           }
         }
       };
+      
       // Save analysis results to application
       const result = await this.applicationModel.findOneAndUpdate(
         { candidat: candidateId, poste: jobId },
@@ -233,7 +373,9 @@ export class JobMatchAnalysisService {
           $set: {
             ...analysisData,
             statut: 'analysé',
-            dateAnalyse: new Date()
+            dateAnalyse: new Date(),
+            // Include salary data in the application record
+            potentialSalary: tunisianSalaryRange
           }
         },
         { new: true }
@@ -246,23 +388,55 @@ export class JobMatchAnalysisService {
 
       this.logger.log('Successfully saved analysis results to database');
       
-      return validatedResponse;
+      // Include salary information in the response
+      const enrichedResponse = {
+        ...validatedResponse,
+        potentialSalary: tunisianSalaryRange
+      };
+      
+      return enrichedResponse;
     } catch (error) {
       this.logger.error('❌ Error validating response:', error);
       this.logger.debug('Invalid Response:', parsedResponse);
       try {
         const recoveredResponse = this.recoverPartialJobMatchResponse(parsedResponse);
         this.logger.log('⚠️ Recovered partial response');
-        return recoveredResponse;
+        // Add salary information to recovered response
+        const candidateSkills = candidate.skills?.map((s: any) => s.name) || [];
+        const candidateEducation = candidate.education?.map((e: any) => e.degree).join(', ') || '';
+        const yearsOfExperience = candidate.yearsOfExperience || 0;
+        
+        const tunisianSalaryRange = this.calculateTunisianSalaryRange(
+          yearsOfExperience,
+          candidateSkills,
+          candidateEducation,
+          job.title
+        );
+        
+        const fallbackResponse: JobMatchResponse = {
+          ...recoveredResponse,
+          potentialSalary: tunisianSalaryRange
+        };
       } catch (recoverError) {
         this.logger.error('❌ Recovery failed, using fallback response');
-        return this.createFallbackJobMatchResponse();
+        // Even for fallback response, include salary data
+        const fallbackWithSalary = {
+          ...this.createFallbackJobMatchResponse(),
+          potentialSalary: this.calculateTunisianSalaryRange(
+            yearsOfExperience || 0,
+            candidateSkills || [],
+            candidateEducation || '',
+            job.title
+          )
+        };
+        
+        return fallbackWithSalary;
       }
     }
   }
   
   private createFallbackJobMatchResponse(): JobMatchResponse {
-    return {
+    const fallbackResponse: JobMatchResponse = {
       resume: {
         score: 50,
         correspondance: {
@@ -271,7 +445,7 @@ export class JobMatchAnalysisService {
           formation: false,
           langues: 50
         },
-        matchedKeywords: [],
+        matchedKeywords: ['compétences techniques', 'aptitudes professionnelles'],
         suggestions: [
           "L'analyse automatique n'a pas pu être complétée, veuillez examiner le profil manuellement"
         ],
@@ -351,7 +525,7 @@ export class JobMatchAnalysisService {
     return response;
   }
 
-  private createJobMatchingPrompt(job: Job, candidate: Candidate): string {
+  private createJobMatchingPrompt(job: Job, candidate: Candidate, potentialMatches: string[] = []): string {
     return `
     Analyse le profil du candidat pour ce poste et génère UNIQUEMENT un objet JSON valide correspondant exactement à ce schéma:
     {
@@ -362,10 +536,11 @@ export class JobMatchAnalysisService {
           "experience": boolean,
           "formation": boolean,
           "langues": number (0-100)
-        }
+        },
+        "matchedKeywords": string[],
+        "highlightsToStandOut": string[],
+        "suggestions": string[]
       },
-      "matchedKeywords": string[],
-      "highlightsToStandOut": string[],
       "signauxAlerte": [
         {
           "type": "Compétence" | "Expérience" | "Formation" | "Langue",
@@ -373,17 +548,16 @@ export class JobMatchAnalysisService {
           "severite": "faible" | "moyenne" | "élevée",
           "score": number (0-100)
         }
-      ],
-      "suggestions": string[]
+      ]
     }
 
     Détails du poste:
-    Titre: ${job.title}
-    Niveau requis: ${job.requirements.educationLevel} en ${job.requirements.fieldOfStudy}
-    Expérience: ${job.requirements.yearsExperienceRequired} ans en ${job.requirements.experienceDomain}
-    Compétences techniques: ${job.requirements.hardSkills}
-    Soft Skills: ${job.requirements.softSkills}
-    Langues: ${job.requirements.languages}
+    Titre: ${job.title || 'Non spécifié'}
+    Niveau requis: ${job.requirements?.educationLevel || 'Non spécifié'} en ${job.requirements?.fieldOfStudy || 'Non spécifié'}
+    Expérience: ${job.requirements?.yearsExperienceRequired || 0} ans en ${job.requirements?.experienceDomain || 'Non spécifié'}
+    Compétences techniques: ${job.requirements?.hardSkills || 'Non spécifié'}
+    Soft Skills: ${job.requirements?.softSkills || 'Non spécifié'}
+    Langues: ${job.requirements?.languages || 'Non spécifié'}
 
     Profil du candidat:
     - Compétences: ${candidate.skills?.map((s: any) => s.name).join(', ') || 'Aucune'}
@@ -394,17 +568,30 @@ export class JobMatchAnalysisService {
     - Ville/Pays: ${candidate.city}, ${candidate.country}
     - Disponibilité: ${candidate.availabilityDate}
 
-    Règles d'analyse:
+    Règles d'analyse STRICTES:
     1. Le score global doit être calculé comme suit:
-     - 60% compétences (0-100)
-     - 20% langues (0-100)
-     - 20% bonus si experience=true
-     - 20% bonus si formation=true
-    2. experience=true si le candidat a l'expérience requise
-    3. formation=true si le candidat a le niveau d'éducation requis
-    4. matchedKeywords = compétences communes entre l'offre et le profil
-    5. highlightsToStandOut = 2-4 points forts du profil
-    6. signauxAlerte = faiblesses majeures avec score et sévérité
+      - 40% compétences (0-100)
+      - 10% langues (0-100)
+      - 25% expérience (0 si false, 100 si true)
+      - 25% formation (0 si false, 100 si true)
+    2. experience=true UNIQUEMENT si le candidat a au moins le nombre d'années d'expérience requises
+    3. formation=true UNIQUEMENT si le candidat a au moins le niveau d'éducation requis
+    4. matchedKeywords DOIT contenir TOUTES les compétences du candidat qui correspondent aux compétences requises pour le poste
+       Par exemple: si le candidat a "JavaScript" et le poste demande "JavaScript/TypeScript", alors "JavaScript" DOIT être inclus
+    5. IMPORTANT: Analyser TRÈS SOIGNEUSEMENT chaque compétence du candidat pour trouver des correspondances même partielles ou similaires
+       Par exemple: "Node.js" correspond à "NodeJS", "React" correspond à "ReactJS", "Express" correspond à "ExpressJS", etc.
+    6. NE PAS IGNORER les correspondances comme "MongoDB" si le poste demande "MongoDB/Mongoose" ou inversement
+    7. Si experience=false, le score global ne peut pas dépasser 50
+    8. Si formation=false, le score global ne peut pas dépasser 50
+    9. Si les compétences correspondent à moins de 40%, le score global ne peut pas dépasser 30
+    10. matchedKeywords = compétences communes entre l'offre et le profil, y compris les correspondances partielles comme "MongoDB" pour "MongoDB/Mongoose"
+    11. highlightsToStandOut = 2-4 points forts du profil
+    12. signauxAlerte = faiblesses majeures avec score et sévérité
+
+    Context additionnel:
+    - L'analyse est pour le marché tunisien qui a des exigences strictes pour les compétences techniques.
+    - Fourchette salariale typique en Tunisie: 800-5000 TND selon l'expérience et les compétences.
+    - Potentielles correspondances de compétences détectées: ${potentialMatches.join(', ')}
 
     Output ONLY the JSON - no additional text, comments or markdown.`;
   }

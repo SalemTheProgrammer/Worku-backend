@@ -8,50 +8,15 @@ import * as mongoose from 'mongoose';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { FileUtils } from '../../common/utils/file.utils';
-import pdfParse from 'pdf-parse';
+import { buildImprovedProfileExtractionPrompt } from './improved-prompt';
+import { JsonParser } from './json-parser';
+import { TranslationHelper } from './translation-helper';
+import { DateHelper } from './date-helper';
+import { ProfileUpdater } from './profile-updater';
+import { ExtractedProfile } from './interfaces/extracted-profile.interface';
+const pdfParse = require('pdf-parse');
 
-interface ExtractedProfile {
-  education?: Array<{
-    institution: string;
-    degree: string;
-    fieldOfStudy: string;
-    startDate: string;
-    endDate?: string;
-    description?: string;
-    specialization?: string;
-    grade?: string;
-  }>;
-  experience?: Array<{
-    company: string;
-    position: string;
-    location?: string;
-    startDate: string;
-    endDate?: string;
-    isCurrent?: boolean;
-    description?: string;
-    skills?: string[];
-    achievements?: string[];
-  }>;
-  certifications?: Array<{
-    name: string;
-    issuingOrganization: string;
-    issueDate: string;
-    expiryDate?: string;
-    credentialId?: string;
-    credentialUrl?: string;
-    description?: string;
-    skills?: string[];
-  }>;
-  skills?: Array<{
-    name: string;
-    category: string;
-    level: number;
-    yearsOfExperience?: number;
-    isLanguage?: boolean;
-    proficiencyLevel?: string;
-  }>;
-  cvUrl?: string;
-}
+// Interface moved to interfaces/extracted-profile.interface.ts
 
 @Injectable()
 export class CvProfileExtractorService {
@@ -79,10 +44,18 @@ export class CvProfileExtractorService {
       // Extract text from PDF using async operations
       let cvText = '';
       try {
+        this.logger.log(`Reading PDF file from: ${absolutePath}`);
         const dataBuffer = await fs.readFile(absolutePath);
+        this.logger.log('PDF file read successfully, attempting to parse...');
         const data = await pdfParse(dataBuffer);
+        this.logger.log(`PDF parsed successfully, extracted ${data.text.length} characters`);
         cvText = data.text;
       } catch (err) {
+        this.logger.error('PDF parsing error details:', {
+          name: err.name,
+          message: err.message,
+          stack: err.stack
+        });
         this.logger.error(`Failed to extract text from CV PDF for candidate ${candidateId}`, {
           error: err.message,
           path: absolutePath,
@@ -135,24 +108,42 @@ export class CvProfileExtractorService {
           });
           throw new InternalServerErrorException('Failed to analyze CV content');
         });
-      this.logger.log(`Received full response from Gemini: ${response}`);
       this.logger.log(`Received response from Gemini: ${response.substring(0, 100)}...`);
       
-      // Clean up the response by removing markdown code blocks
-      const cleanedResponse = response.replace(/```json\n|\n```|```/g, '').trim();
-      
       try {
-        // Try to find JSON in the response
-        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? jsonMatch[0] : cleanedResponse;
+        // Use our advanced JSON parser
+        this.logger.debug('Using JsonParser to parse Gemini response');
+        const extractedData = JsonParser.parseJson(response);
         
-        this.logger.log(`Attempting to parse JSON: ${jsonString.substring(0, 100)}...`);
-        const extractedData = JSON.parse(jsonString);
+        if (!extractedData) {
+          this.logger.error('JsonParser failed to parse the response');
+          // Return empty structure as fallback
+          return {
+            education: [],
+            experience: [],
+            certifications: [],
+            skills: []
+          };
+        }
+        
+        // Check for fitScore which indicates wrong response type (job analysis instead of profile)
+        if (extractedData.fitScore || extractedData.jobFitSummary) {
+          this.logger.error('Received job analysis response instead of profile data');
+          // Return empty structure as fallback
+          return {
+            education: [],
+            experience: [],
+            certifications: [],
+            skills: []
+          };
+        }
+        
+        this.logger.debug('JsonParser successfully parsed the response');
         return this.validateExtractedProfile(extractedData);
       } catch (error) {
         this.logger.error('Failed to parse Gemini response as JSON', {
           error: error.message,
-          response: cleanedResponse.substring(0, 200) + '...',
+          response: response.substring(0, 200) + '...',
         });
         return null;
       }
@@ -173,27 +164,27 @@ export class CvProfileExtractorService {
     // Validate and normalize education data
     if (Array.isArray(data.education)) {
       validatedProfile.education = data.education.map(edu => ({
-        institution: edu.institution || '',
-        degree: edu.degree || '',
-        fieldOfStudy: edu.fieldOfStudy || '',
+        institution: edu.institution || 'Non spécifié',
+        degree: edu.degree || 'Non spécifié',
+        fieldOfStudy: edu.fieldOfStudy || 'Non spécifié', // Ensure fieldOfStudy is never empty
         startDate: this.formatDate(edu.startDate),
         endDate: edu.endDate ? this.formatDate(edu.endDate) : undefined,
-        description: edu.description,
-        specialization: edu.specialization,
-        grade: edu.grade
-      })).filter(edu => edu.institution && edu.degree);
+        description: edu.description || '',
+        specialization: edu.specialization || '',
+        grade: edu.grade || ''
+      })).filter(edu => edu.institution && edu.degree && edu.fieldOfStudy); // Ensure all required fields are present
     }
 
     // Validate and normalize experience data
     if (Array.isArray(data.experience)) {
       validatedProfile.experience = data.experience.map(exp => ({
-        company: exp.company || '',
-        position: exp.position || '',
-        location: exp.location,
+        company: exp.company || 'Non spécifié',
+        position: exp.position || 'Non spécifié',
+        location: exp.location || 'Non spécifié',
         startDate: this.formatDate(exp.startDate),
         endDate: exp.endDate ? this.formatDate(exp.endDate) : undefined,
         isCurrent: exp.isCurrent || false,
-        description: exp.description,
+        description: exp.description || '',
         skills: Array.isArray(exp.skills) ? exp.skills : [],
         achievements: Array.isArray(exp.achievements) ? exp.achievements : []
       })).filter(exp => exp.company && exp.position);
@@ -202,13 +193,13 @@ export class CvProfileExtractorService {
     // Validate and normalize certification data
     if (Array.isArray(data.certifications)) {
       validatedProfile.certifications = data.certifications.map(cert => ({
-        name: cert.name || '',
-        issuingOrganization: cert.issuingOrganization || '',
+        name: cert.name || 'Non spécifié',
+        issuingOrganization: cert.issuingOrganization || 'Non spécifié',
         issueDate: this.formatDate(cert.issueDate),
         expiryDate: cert.expiryDate ? this.formatDate(cert.expiryDate) : undefined,
-        credentialId: cert.credentialId,
-        credentialUrl: cert.credentialUrl,
-        description: cert.description,
+        credentialId: cert.credentialId || '',
+        credentialUrl: cert.credentialUrl || '',
+        description: cert.description || '',
         skills: Array.isArray(cert.skills) ? cert.skills : []
       })).filter(cert => cert.name && cert.issuingOrganization);
     }
@@ -244,19 +235,12 @@ export class CvProfileExtractorService {
 
     return validatedProfile;
   }
+  
+  // Removed parseLenientJson method - functionality moved to JsonParser class
 
   private formatDate(dateString: string): string {
-    if (!dateString) return new Date().toISOString().split('T')[0];
-    
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return new Date().toISOString().split('T')[0];
-      }
-      return date.toISOString().split('T')[0];
-    } catch (e) {
-      return new Date().toISOString().split('T')[0];
-    }
+    // Use the DateHelper to parse and format the date
+    return DateHelper.formatDateToString(DateHelper.safeParse(dateString));
   }
 
   private mapSkillCategory(category: string): SkillCategory {
@@ -320,155 +304,119 @@ export class CvProfileExtractorService {
   }
 
   private buildProfileExtractionPrompt(cvContent: string): string {
-    return `
-Extract structured profile data from this CV content. Focus on education, experience, certifications, and skills.
-
-IMPORTANT: Return ONLY raw JSON without any markdown formatting or code blocks. The response must start with { and end with }.
-
-Use this exact format:
-{
-  "education": [
-    {
-      "institution": "University name",
-      "degree": "Degree name",
-      "fieldOfStudy": "Field of study",
-      "startDate": "YYYY-MM-DD",
-      "endDate": "YYYY-MM-DD",
-      "description": "Optional description",
-      "specialization": "Optional specialization",
-      "grade": "Optional grade"
-    }
-  ],
-  "experience": [
-    {
-      "company": "Company name",
-      "position": "Job title",
-      "location": "Location",
-      "startDate": "YYYY-MM-DD",
-      "endDate": "YYYY-MM-DD",
-      "isCurrent": false,
-      "description": "Job description",
-      "skills": ["Skill 1", "Skill 2"],
-      "achievements": ["Achievement 1", "Achievement 2"]
-    }
-  ],
-  "certifications": [
-    {
-      "name": "Certification name",
-      "issuingOrganization": "Issuing organization",
-      "issueDate": "YYYY-MM-DD",
-      "expiryDate": "YYYY-MM-DD",
-      "credentialId": "Optional credential ID",
-      "credentialUrl": "Optional credential URL",
-      "description": "Optional description",
-      "skills": ["Skill 1", "Skill 2"]
-    }
-  ],
-  "skills": [
-    {
-      "name": "Skill name",
-      "category": "technical" | "soft" | "language" | "tool" | "framework" | "database" | "other", // REQUIRED - must be one of these values
-      "level": 1-5 (1=beginner, 5=expert),
-      "yearsOfExperience": Optional years of experience,
-      "isLanguage": false,
-      "proficiencyLevel": For language skills only, use one of: "Natif", "Professionnel", "Intermédiaire", "Débutant"
-    }
-  ]
-}
-
-CV Content:
-${cvContent}
-`;
+    return buildImprovedProfileExtractionPrompt(cvContent);
   }
 
   private async updateCandidateProfile(candidateId: string, extractedProfile: ExtractedProfile): Promise<void> {
-    const updateOperations = {};
-    const objectId = new mongoose.Types.ObjectId(candidateId);
+    try {
+      this.logger.log(`Starting profile update for candidate: ${candidateId}`);
+      const updateOperations = {};
+      const objectId = new mongoose.Types.ObjectId(candidateId);
 
-    // Update education if available
-    if (extractedProfile.education && extractedProfile.education.length > 0) {
-      // Generate unique IDs for each education entry
-      const educationWithIds = extractedProfile.education.map(edu => ({
-        ...edu,
-        _id: new mongoose.Types.ObjectId().toString()
-      }));
-      updateOperations['education'] = educationWithIds;
-      updateOperations['fieldsCompleted.education'] = true;
-    }
+      // Translate profile data to French
+      const translatedProfile = TranslationHelper.translateProfileToFrench(extractedProfile);
+      this.logger.debug('Profile data translated to French');
 
-    // Update experience if available
-    if (extractedProfile.experience && extractedProfile.experience.length > 0) {
-      // Generate unique IDs for each experience entry
-      const experienceWithIds = extractedProfile.experience.map(exp => ({
-        ...exp,
-        _id: new mongoose.Types.ObjectId().toString()
-      }));
-      updateOperations['experience'] = experienceWithIds;
-      updateOperations['fieldsCompleted.experience'] = true;
-    }
-
-    // Update certifications if available
-    if (extractedProfile.certifications && extractedProfile.certifications.length > 0) {
-      // Generate unique IDs for each certification entry
-      const certificationsWithIds = extractedProfile.certifications.map(cert => ({
-        ...cert,
-        _id: new mongoose.Types.ObjectId().toString()
-      }));
-      updateOperations['certifications'] = certificationsWithIds;
-      updateOperations['fieldsCompleted.certifications'] = true;
-    }
-
-    // Update skills if available
-    if (extractedProfile.skills && extractedProfile.skills.length > 0) {
-      // Final validation to ensure all skills have a valid category
-      const validSkills = extractedProfile.skills.filter(skill => {
-        if (!skill.category) {
-          this.logger.warn(`Skipping skill "${skill.name}" due to missing category`);
-          return false;
+      // Process education entries
+      if (translatedProfile.education && translatedProfile.education.length > 0) {
+        try {
+          const educationEntries = ProfileUpdater.prepareEducationEntries(translatedProfile.education);
+          this.logger.log(`Processed ${educationEntries.length} education entries`);
+          
+          if (educationEntries.length > 0) {
+            updateOperations['education'] = educationEntries;
+            updateOperations['fieldsCompleted.education'] = true;
+          }
+        } catch (error) {
+          this.logger.error(`Error processing education entries: ${error.message}`, error.stack);
         }
-        return true;
-      });
-      
-      if (validSkills.length === 0) {
-        this.logger.warn('No valid skills found after filtering, skills will not be updated');
-      } else {
-        // Generate unique IDs for each skill entry
-        const skillsWithIds = validSkills.map(skill => ({
-          ...skill,
-          _id: new mongoose.Types.ObjectId().toString()
-        }));
-        
-        this.logger.log(`Adding ${skillsWithIds.length} validated skills to candidate profile`);
-        updateOperations['skills'] = skillsWithIds;
       }
+
+      // Process experience entries
+      if (translatedProfile.experience && translatedProfile.experience.length > 0) {
+        try {
+          const experienceEntries = ProfileUpdater.prepareExperienceEntries(translatedProfile.experience);
+          this.logger.log(`Processed ${experienceEntries.length} experience entries`);
+          
+          if (experienceEntries.length > 0) {
+            updateOperations['experience'] = experienceEntries;
+            updateOperations['fieldsCompleted.experience'] = true;
+          }
+        } catch (error) {
+          this.logger.error(`Error processing experience entries: ${error.message}`, error.stack);
+        }
+      }
+
+      // Process certification entries
+      if (translatedProfile.certifications && translatedProfile.certifications.length > 0) {
+        try {
+          const certificationEntries = ProfileUpdater.prepareCertificationEntries(translatedProfile.certifications);
+          this.logger.log(`Processed ${certificationEntries.length} certification entries`);
+          
+          if (certificationEntries.length > 0) {
+            updateOperations['certifications'] = certificationEntries;
+            updateOperations['fieldsCompleted.certifications'] = true;
+          }
+        } catch (error) {
+          this.logger.error(`Error processing certification entries: ${error.message}`, error.stack);
+        }
+      }
+
+      // Process skill entries
+      if (translatedProfile.skills && translatedProfile.skills.length > 0) {
+        try {
+          const skillEntries = ProfileUpdater.prepareSkillEntries(translatedProfile.skills);
+          this.logger.log(`Processed ${skillEntries.length} skill entries`);
+          
+          if (skillEntries.length > 0) {
+            updateOperations['skills'] = skillEntries;
+            updateOperations['fieldsCompleted.skills'] = true;
+          }
+        } catch (error) {
+          this.logger.error(`Error processing skill entries: ${error.message}`, error.stack);
+        }
+      }
+
+      // Calculate profile completion score
+      try {
+        const fieldsCompleted = await this.candidateModel.findById(candidateId).select('fieldsCompleted');
+        const completionScore = ProfileUpdater.calculateCompletionScore(
+          fieldsCompleted && fieldsCompleted.fieldsCompleted ? fieldsCompleted.fieldsCompleted : {}
+        );
+        
+        updateOperations['profileCompletionScore'] = completionScore;
+      } catch (error) {
+        this.logger.error(`Error calculating completion score: ${error.message}`, error.stack);
+        updateOperations['profileCompletionScore'] = 50; // Default value if calculation fails
+      }
+      
+      updateOperations['updatedAt'] = new Date();
+
+      // Check if we have any fields to update
+      if (Object.keys(updateOperations).length === 0) {
+        this.logger.warn(`No valid profile data extracted for candidate ${candidateId}`);
+        return;
+      }
+
+      // Log update summary (not full object to avoid large logs)
+      this.logger.log(`Updating candidate ${candidateId} with ${Object.keys(updateOperations).length} fields`);
+
+      // Update the candidate profile
+      const updatedCandidate = await this.candidateModel.findByIdAndUpdate(
+        objectId,
+        { $set: updateOperations },
+        { new: true }
+      );
+      
+      if (!updatedCandidate) {
+        this.logger.error(`Failed to update candidate ${candidateId} - candidate not found`);
+        throw new Error('Candidate not found');
+      }
+      
+      this.logger.log(`Successfully updated candidate ${candidateId} profile`);
+    } catch (error) {
+      this.logger.error(`Failed to update candidate profile: ${error.message}`, error.stack);
+      throw error;
     }
-
-    // Calculate profile completion score
-    const fieldsCompleted = await this.candidateModel.findById(candidateId).select('fieldsCompleted');
-    const completedFields = fieldsCompleted && fieldsCompleted.fieldsCompleted ?
-      Object.values(fieldsCompleted.fieldsCompleted).filter(Boolean).length : 0;
-    const totalFields = fieldsCompleted && fieldsCompleted.fieldsCompleted ?
-      Object.keys(fieldsCompleted.fieldsCompleted).length : 6; // Default to 6 fields
-    const completionScore = Math.round((completedFields / totalFields) * 100);
-    
-    updateOperations['profileCompletionScore'] = completionScore;
-    updateOperations['updatedAt'] = new Date();
-
-    // Log the update operations
-    this.logger.log(`Updating candidate profile with: ${JSON.stringify(updateOperations, null, 2).substring(0, 200)}...`);
-
-    // Update the candidate profile
-    const updatedCandidate = await this.candidateModel.findByIdAndUpdate(
-      objectId,
-      { $set: updateOperations },
-      { new: true }
-    );
-    
-    if (!updatedCandidate) {
-      this.logger.error(`Failed to update candidate ${candidateId} - candidate not found`);
-      throw new Error('Candidate not found');
-    }
-    
-    this.logger.log(`Successfully updated candidate ${candidateId} profile`);
   }
 }

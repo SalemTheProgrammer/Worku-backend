@@ -5,7 +5,7 @@ import { Application } from '../schemas/application.schema';
 import { Job } from '../schemas/job.schema';
 import { Candidate } from '../schemas/candidate.schema';
 import { Company } from '../schemas/company.schema';
-import { JobMatchAnalysisService } from './job-match-analysis.service';
+import { JobMatchAnalysisWrapperService } from './job-match-analysis-wrapper.service';
 import { OnQueueActive, OnQueueCompleted, OnQueueFailed, OnQueueStalled, Process, Processor } from '@nestjs/bull';
 import { Job as BullJob } from 'bull';
 import { EmailService } from '../email/email.service';
@@ -101,7 +101,7 @@ export class ApplicationAnalysisWorker {
   constructor(
     @InjectModel(Application.name)
     private readonly applicationModel: Model<Application>,
-    private readonly jobMatchAnalysisService: JobMatchAnalysisService,
+    private readonly jobMatchAnalysisService: JobMatchAnalysisWrapperService,
     private readonly emailService: EmailService
   ) {
     this.logger.log('Analysis worker initialized');

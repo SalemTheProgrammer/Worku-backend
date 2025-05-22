@@ -4,7 +4,7 @@ import { Job } from 'bull';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Application } from '../../schemas/application.schema';
-import { JobMatchAnalysisService } from '../job-match-analysis.service';
+import { JobMatchAnalysisWrapperService } from '../job-match-analysis-wrapper.service';
 
 @Processor('application-analysis')
 export class ApplicationAnalysisProcessor {
@@ -12,7 +12,7 @@ export class ApplicationAnalysisProcessor {
 
   constructor(
     @InjectModel(Application.name) private readonly applicationModel: Model<Application>,
-    private readonly jobMatchAnalysisService: JobMatchAnalysisService,
+    private readonly jobMatchAnalysisService: JobMatchAnalysisWrapperService,
   ) {}
 
   @Process('analyze')

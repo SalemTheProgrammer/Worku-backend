@@ -14,6 +14,8 @@ import { ApplicationModule } from './application/application.module';
 import { HealthModule } from './common/health/health.module';
 import { GeminiModule } from './services/gemini.module';
 import { InterviewModule } from './interview/interview.module';
+import { JournalModule } from './journal/journal.module';
+import { RejectionModule } from './rejection/rejection.module';
 import configuration from './common/config/configuration';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -93,6 +95,8 @@ import { AppService } from './app.service';
     HealthModule,
     GeminiModule,
     InterviewModule,
+    JournalModule,
+    RejectionModule,
   ],
   providers: [
     AppService,
@@ -125,6 +129,6 @@ export class AppModule implements NestModule {
         { path: 'public/*filePath', method: RequestMethod.GET },
         { path: 'assets/*filePath', method: RequestMethod.GET }
       )
-      .forRoutes({ path: '*', method: RequestMethod.ALL });
+      .forRoutes({ path: '*path', method: RequestMethod.ALL });
   }
 }

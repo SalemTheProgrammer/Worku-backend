@@ -7,6 +7,7 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
 import { EmailModule } from '../email/email.module';
 import { ConfigModule } from '@nestjs/config';
+import { JournalModule } from '../journal/journal.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { ConfigModule } from '@nestjs/config';
       { name: Candidate.name, schema: CandidateSchema }
     ]),
     EmailModule,
-    ConfigModule
+    ConfigModule,
+    JournalModule
   ],
   controllers: [InterviewController],
   providers: [InterviewService],

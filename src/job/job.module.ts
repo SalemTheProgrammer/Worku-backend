@@ -15,6 +15,7 @@ import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
 import { RedisCacheModule } from '../cache/cache.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JobMapperImpl } from './interfaces/job-mapper.interface';
+import { JournalModule } from '../journal/journal.module';
 
 const schemas = [
   { name: Job.name, schema: JobSchema },
@@ -40,7 +41,8 @@ const services = [
     MongooseModule.forFeature(schemas),
     RedisCacheModule,
     ScheduleModule.forRoot(),
-    ApplicationModule
+    ApplicationModule,
+    JournalModule
   ],
   controllers: [JobController, JobApplicationsController],
   providers: [...services],

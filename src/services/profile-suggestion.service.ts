@@ -1,26 +1,8 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { GeminiClientService } from './gemini-client.service';
 import { ValidationUtilsService } from './validation-utils.service';
-import { Education } from '../schemas/education.schema';
-import { Experience } from '../schemas/experience.schema';
-import { Skill } from '../schemas/skill.schema';
-import { Certification } from '../schemas/certification.schema';
-import { ProfessionalStatus } from '../job/enums/professional-status.enum';
 import { ProfileSuggestionsResponseDto } from '../candidate/dto/profile-suggestions.dto';
-
-interface ProfileData {
-  userId: string;
-  education: Education[];
-  experience: Experience[];
-  skills: Skill[];
-  certifications: Certification[];
-  professionalStatus: ProfessionalStatus;
-  workPreferences?: string[];
-  industryPreferences?: string[];
-  yearsOfExperience?: number;
-  country?: string;
-  city?: string;
-}
+import { ProfileData, createProfileSuggestionsPrompt } from '../prompts';
 
 @Injectable()
 export class ProfileSuggestionService {
@@ -45,7 +27,7 @@ export class ProfileSuggestionService {
 
   async generateProfileSuggestions(profileData: ProfileData): Promise<ProfileSuggestionsResponseDto> {
     try {
-      const prompt = this.createProfileSuggestionsPrompt(profileData);
+      const prompt = createProfileSuggestionsPrompt(profileData);
       const result = await this.geminiClient.generateContent(prompt);
       
       try {
@@ -67,31 +49,5 @@ export class ProfileSuggestionService {
     }
   }
 
-  private createProfileSuggestionsPrompt(profileData: ProfileData): string {
-    return `
-    Tu es un assistant RH spécialisé dans l'optimisation de profils professionnels.
-    Analyse les données du profil ci-dessous et suggère des améliorations pertinentes.
-    
-    Basé sur l'expérience, les compétences et les préférences du candidat, propose :
-    - Des rôles professionnels adaptés
-    - Des compétences à développer pour progresser
-    - Des industries prometteuses selon son profil
-    - Des localisations stratégiques pour sa carrière
-    - Des certifications pertinentes à obtenir
-    
-    Répond uniquement avec un JSON structuré comme ceci :
-    {
-      "suggestions": {
-        "role": ["Liste de rôles recommandés"],
-        "skills": ["Liste de compétences à acquérir"],
-        "industries": ["Liste d'industries prometteuses"],
-        "locations": ["Liste de lieux stratégiques"],
-        "certifications": ["Liste de certifications recommandées"]
-      }
-    }
-    
-    Profil du candidat :
-    ${JSON.stringify(profileData, null, 2)}
-    `;
-  }
+  // Prompt templates have been moved to src/prompts directory
 }

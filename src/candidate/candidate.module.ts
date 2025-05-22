@@ -18,6 +18,7 @@ import { CertificationService } from './services/certification.service';
 import { CvSkillsService } from './services/cv-skills.service';
 import { CvAnalysisQueue } from './cv-analysis.queue';
 import { CvAnalysisProcessor } from './cv-analysis.processor';
+import { CvProfileExtractionProcessor } from './cv-profile-extraction.processor';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
 import { Skill, SkillSchema } from '../schemas/skill.schema';
 import { Education, EducationSchema } from '../schemas/education.schema';
@@ -25,6 +26,7 @@ import { Certification, CertificationSchema } from '../schemas/certification.sch
 import { GeminiModule } from '../services/gemini.module';
 import { OtpModule } from '../otp/otp.module';
 import { CvProfileExtractorModule } from './cv-profile-extractor/cv-profile-extractor.module';
+import { JournalModule } from '../journal/journal.module';
 
 @Module({
   imports: [
@@ -58,7 +60,8 @@ import { CvProfileExtractorModule } from './cv-profile-extractor/cv-profile-extr
     ConfigModule,
     OtpModule,
     forwardRef(() => CvProfileExtractorModule),
-    GeminiModule
+    GeminiModule,
+    JournalModule
   ],
   controllers: [
     CandidateController,
@@ -75,6 +78,7 @@ import { CvProfileExtractorModule } from './cv-profile-extractor/cv-profile-extr
     CvSkillsService,
     CvAnalysisQueue,
     CvAnalysisProcessor,
+    CvProfileExtractionProcessor,
     EducationService,
     SkillService,
     CertificationService,

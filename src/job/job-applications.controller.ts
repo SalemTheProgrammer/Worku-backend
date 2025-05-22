@@ -5,7 +5,7 @@ import { FilterApplicationsDto } from '../application/dto/filter-applications.dt
 import { ApiResponseData } from '../common/interfaces/api-response.interface';
 import { ApplicationService } from '../application/application.service';
 import { Request as ExpressRequest } from 'express';
-import { JobApplicationsListResponseDto, JobApplicationResponseDto } from './dto/job-application-response.dto';
+import { JobApplicationsListResponseDto, JobApplicationResponseDto, TunisianMarketDto } from './dto/job-application-response.dto';
 import { TransformInterceptor } from '../common/interceptors/transform.interceptor';
 import { ApplicationDocument } from '../schemas/application.schema';
 
@@ -74,7 +74,7 @@ export class JobApplicationsController {
 
       return {
         statusCode: 200,
-        message: 'Candidatures récupérées avec succès',
+        message: 'Applications retrieved successfully',
         data: {
           applications: validApplications,
           total: result.total
@@ -255,6 +255,18 @@ export class JobApplicationsController {
         }
       };
 
+      // Map Tunisian market data if available
+      const tunisianMarket = app.analyse?.marchéTunisien ? {
+        salaryRange: {
+          min: app.analyse.marchéTunisien.fourchetteSalariale?.min || 0,
+          max: app.analyse.marchéTunisien.fourchetteSalariale?.max || 0,
+          currency: app.analyse.marchéTunisien.fourchetteSalariale?.devise || 'TND'
+        },
+        hiringPotential: app.analyse.marchéTunisien.potentielDEmbauche || 'Non évalué',
+        inDemandSkills: app.analyse.marchéTunisien.compétencesDemandées || [],
+        estimatedRecruitmentTime: app.analyse.marchéTunisien.tempsEstiméRecrutement || 'Non évalué'
+      } : undefined;
+
       return {
         applicationId: app._id?.toString() || '',
         candidate: app.candidat ? {
@@ -274,6 +286,7 @@ export class JobApplicationsController {
         appliedAt: app.datePostulation || new Date(),
         matchedKeywords: app.analyse?.matchedKeywords || [],
         highlightsToStandOut: app.analyse?.highlightsToStandOut || [],
+        tunisianMarket,
         fitScore: {
           overall: app.analyse?.scoreDAdéquation?.global || 0,
           skills: app.analyse?.scoreDAdéquation?.compétences || 0,

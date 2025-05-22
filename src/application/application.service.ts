@@ -139,6 +139,7 @@ export class ApplicationService implements IApplicationService {
         companyId: job.companyId,
         datePostulation: new Date(),
         statut: 'en_attente',
+        isRejected: false, // Initialize the isRejected flag to false
         analyse: {
           scoreDAdéquation: {
             global: 0,
@@ -214,7 +215,9 @@ export class ApplicationService implements IApplicationService {
       throw new NotFoundException(`Application ${id} not found`);
     }
     return application as any;
-  }  async getApplicationsByCandidate(
+  }  
+  
+  async getApplicationsByCandidate(
     candidateId: string,
     filters?: FilterApplicationsDto
   ): Promise<GetApplicationsResult> {
@@ -239,16 +242,22 @@ export class ApplicationService implements IApplicationService {
     const sortDir: 1 | -1 = filters.sortOrder === 'asc' ? 1 : -1;
 
     try {
+      // Always exclude rejected applications
+      const finalQuery = {
+        ...baseQuery,
+        isRejected: { $ne: true }
+      };
+
       const [applications, total] = await Promise.all([
         this.applicationModel
-          .find(baseQuery)
+          .find(finalQuery)
           .populate(populateOpts)
           .sort({ datePostulation: sortDir })
           .skip(skipVal)
           .limit(limitVal)
           .lean()
           .exec(),
-        this.applicationModel.countDocuments(baseQuery)
+        this.applicationModel.countDocuments(finalQuery)
       ]);
 
       return { applications, total };
@@ -260,6 +269,7 @@ export class ApplicationService implements IApplicationService {
       );
     }
   }
+  
   async getApplicationsByCompany(
     companyId: string,
     filters: FilterApplicationsDto

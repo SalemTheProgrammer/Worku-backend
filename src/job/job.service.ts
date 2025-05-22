@@ -7,17 +7,33 @@ import { CandidateResponseDto } from './dto/candidate-response.dto';
 import { JobBaseService } from './services/job-base.service';
 import { JobViewService } from './services/job-view.service';
 import { JobCandidateService } from './services/job-candidate.service';
+import { CompanyJournalService } from '../journal/services/company-journal.service';
+import { CompanyActionType } from '../journal/enums/action-types.enum';
 
 @Injectable()
 export class JobService {
   constructor(
     private jobBaseService: JobBaseService,
     private jobViewService: JobViewService,
-    private jobCandidateService: JobCandidateService
+    private jobCandidateService: JobCandidateService,
+    private companyJournalService: CompanyJournalService
   ) {}
 
   async createJob(companyId: string, createJobDto: CreateJobDto): Promise<{ message: string; id: string }> {
-    return this.jobBaseService.createJob(companyId, createJobDto);
+    const result = await this.jobBaseService.createJob(companyId, createJobDto);
+    
+    // Log job creation activity
+    await this.companyJournalService.logActivity(
+      companyId,
+      CompanyActionType.CREATION_OFFRE_EMPLOI,
+      {
+        jobId: result.id,
+        jobTitle: createJobDto.title
+      },
+      `Création d'offre d'emploi: ${createJobDto.title}`
+    );
+    
+    return result;
   }
 
   async getCompanyJobs(companyId: string): Promise<JobListResponseDto> {
@@ -48,7 +64,22 @@ export class JobService {
   }
 
   async deleteJob(companyId: string, jobId: string): Promise<{ message: string }> {
-    return this.jobBaseService.deleteJob(companyId, jobId);
+    // Get job details before deletion to use in the activity log
+    const jobDetails = await this.jobBaseService.getJobDetails(jobId);
+    const result = await this.jobBaseService.deleteJob(companyId, jobId);
+    
+    // Log job deletion activity
+    await this.companyJournalService.logActivity(
+      companyId,
+      CompanyActionType.SUPPRESSION_OFFRE_EMPLOI,
+      {
+        jobId,
+        jobTitle: jobDetails.title
+      },
+      `Suppression d'offre d'emploi: ${jobDetails.title}`
+    );
+    
+    return result;
   }
 
   async getCandidateByJobId(jobId: string, candidateId: string): Promise<CandidateResponseDto> {

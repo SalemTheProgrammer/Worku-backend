@@ -6,10 +6,11 @@ import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Job, JobSchema } from '../schemas/job.schema';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
 import { Company, CompanySchema } from '../schemas/company.schema';
-import { JobMatchAnalysisService } from './job-match-analysis.service';
+import { JobMatchAnalysisWrapperService } from './job-match-analysis-wrapper.service';
 import { EmailModule } from '../email/email.module';
 import { ApplicationQueueModule } from './application-queue.module';
 import { GeminiModule } from '../services/gemini.module';
+import { JobMatchModule } from './job-match/job-match.module';
 
 @Module({
   imports: [
@@ -21,10 +22,11 @@ import { GeminiModule } from '../services/gemini.module';
     ]),
     EmailModule,
     ApplicationQueueModule,
-    GeminiModule
+    GeminiModule,
+    JobMatchModule
   ],
   controllers: [ApplicationController],
-  providers: [ApplicationService, JobMatchAnalysisService],
-  exports: [ApplicationService]
+  providers: [ApplicationService, JobMatchAnalysisWrapperService],
+  exports: [ApplicationService, JobMatchAnalysisWrapperService]
 })
 export class ApplicationModule {}

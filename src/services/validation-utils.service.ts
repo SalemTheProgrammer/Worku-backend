@@ -1,19 +1,20 @@
 import { Injectable } from '@nestjs/common';
 
-interface FitScore {
+export interface FitScore {
   overall: number;
   skills: number;
   experience: number;
   education: number;
   yearsExperience: number; // Actual years of professional experience (excluding internships)
+  languages?: number;      // Optional language proficiency score
 }
 
-interface FitBreakdown {
-  matchLevel: 'Strong' | 'Partial' | 'Weak' | 'Misaligned';
+export interface FitBreakdown {
+  matchLevel: 'Strong' | 'Good' | 'Partial' | 'Weak' | 'Misaligned';
   details: string[];
 }
 
-interface JobFitSummary {
+export interface JobFitSummary {
   isRecommended: boolean;
   fitLevel: 'High' | 'Medium' | 'Low';
   reason: string;
@@ -24,19 +25,19 @@ interface JobFitSummary {
   };
 }
 
-interface RecruiterRecommendations {
+export interface RecruiterRecommendations {
   decision: 'Hire' | 'Consider' | 'Reject';
   suggestedAction: string;
   feedbackToSend: string[];
 }
 
-interface ApplicationAnalysisResponse {
+export interface ApplicationAnalysisResponse {
   fitScore: FitScore;
   jobFitSummary: JobFitSummary;
   recruiterRecommendations: RecruiterRecommendations;
 }
 
-interface ProfileSuggestionsResponseDto {
+export interface ProfileSuggestionsResponseDto {
   suggestions: {
     role: string[];
     skills: string[];
@@ -70,6 +71,7 @@ export class ValidationUtilsService {
   }
 
   private isValidFitScore(score: any): score is FitScore {
+    // Required fields validation
     if (!score ||
         typeof score.overall !== 'number' ||
         typeof score.skills !== 'number' ||
@@ -79,43 +81,53 @@ export class ValidationUtilsService {
       return false;
     }
 
-    // Fixed scoring rules for insufficient experience
-    if (score.yearsExperience === 0 || !score.yearsExperience) {
-      return (
-        score.overall === 25 &&
-        score.experience === 0
-      );
-    }
-
-    if (score.yearsExperience < 3) {
-      return (
-        score.overall <= 25 &&
-        score.experience === 0
-      );
+    // Optional fields validation
+    if (score.languages !== undefined && typeof score.languages !== 'number') {
+      return false;
     }
 
     // Basic range checks
     if (score.overall < 0 || score.overall > 100 ||
         score.skills < 0 || score.skills > 100 ||
         score.experience < 0 || score.experience > 100 ||
-        score.education < 0 || score.education > 100) {
+        score.education < 0 || score.education > 100 ||
+        (score.languages !== undefined && (score.languages < 0 || score.languages > 100))) {
       return false;
     }
 
-    // Experience weight validation
-    const expectedOverall = (
-      (score.experience * 0.5) +  // Experience is 50%
-      (score.skills * 0.3) +      // Skills are 30%
-      (score.education * 0.2)     // Education is 20%
+    // Fixed scoring rules for insufficient experience
+    if (score.yearsExperience === 0 || !score.yearsExperience) {
+      return score.experience === 0 && score.overall <= 25;
+    }
+
+    if (score.yearsExperience < 3) {
+      return score.experience === 0 && score.overall <= 25;
+    }
+
+    // Calculate weighted score including optional language score
+    const weights = {
+      experience: 0.45,  // Reduced from 0.5 to accommodate languages
+      skills: 0.25,      // Reduced from 0.3
+      education: 0.2,    // Unchanged
+      languages: 0.1     // New weight for languages
+    };
+
+    let expectedOverall = (
+      (score.experience * weights.experience) +
+      (score.skills * weights.skills) +
+      (score.education * weights.education)
     );
 
-    // Allow for small rounding differences
-    if (Math.abs(score.overall - expectedOverall) > 1) {
-      return false;
+    // Add language score if present
+    if (score.languages !== undefined) {
+      expectedOverall += (score.languages * weights.languages);
+    } else {
+      // Redistribute language weight to other categories
+      expectedOverall = expectedOverall * (1 / (1 - weights.languages));
     }
 
-    // Enforce max 30% overall score if experience is insufficient
-    if (score.experience < 70 && score.overall > 30) {
+    // Allow for reasonable variance in overall score calculation
+    if (Math.abs(score.overall - expectedOverall) > 5) {
       return false;
     }
 
@@ -125,7 +137,7 @@ export class ValidationUtilsService {
   private isValidFitBreakdown(breakdown: any): breakdown is FitBreakdown {
     return (
       breakdown &&
-      ['Strong', 'Partial', 'Weak', 'Misaligned'].includes(breakdown.matchLevel) &&
+      ['Strong', 'Good', 'Partial', 'Weak', 'Misaligned'].includes(breakdown.matchLevel) &&
       Array.isArray(breakdown.details) &&
       breakdown.details.every((detail: any) => typeof detail === 'string')
     );

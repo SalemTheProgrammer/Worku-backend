@@ -135,6 +135,9 @@ async function bootstrap() {
         .addTag('Profile Picture', 'Candidate profile picture management')
         .addTag('CV', 'Candidate CV management')
         .addTag('interviews', 'Interview scheduling and management')
+        .addTag('rejections', 'Application rejection management and automated emails')
+        .addTag('Journal des Activités - Entreprise', 'Journal des activités pour les entreprises')
+        .addTag('Journal des Activités - Candidat', 'Journal des activités pour les candidats')
         .addBearerAuth()
         .build();
 

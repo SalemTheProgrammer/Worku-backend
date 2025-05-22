@@ -8,6 +8,8 @@ import { OtpService } from '../otp/otp.service';
 import { AuthService } from '../auth/auth.service';
 import { UserRole } from '../interfaces/user.interface';
 import { CompanyResponse } from '../interfaces/company-response.interface';
+import { CompanyJournalService } from '../journal/services/company-journal.service';
+import { CompanyActionType } from '../journal/enums/action-types.enum';
 
 @Injectable()
 export class CompanyAuthService {
@@ -15,6 +17,7 @@ export class CompanyAuthService {
     @InjectModel(Company.name) private companyModel: Model<Company>,
     private readonly otpService: OtpService,
     private readonly authService: AuthService,
+    private readonly companyJournalService: CompanyJournalService,
   ) {}
 
   // Helper function to create the response object
@@ -227,6 +230,18 @@ export class CompanyAuthService {
         invitedUser.isAccepted = true;
       }
       await company.save();
+      
+      // Log the login activity
+      await this.companyJournalService.logActivity(
+        company.id,
+        CompanyActionType.CONNEXION,
+        {
+          isInvitedUser,
+          userRole,
+          nomDeUtilisateur
+        },
+        `Connexion réussie pour ${normalizedEmail}`
+      );
 
       const companyData = company.toObject();
       const response = this.createCompanyResponse(companyData, nomDeUtilisateur, userRole);

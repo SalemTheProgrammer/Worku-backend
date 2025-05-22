@@ -140,6 +140,13 @@ export class Candidate extends Document {
   @Prop({ type: [CertificationSchema], default: [] })
   certifications: Certification[];
 
+  // Rejected Applications
+  @Prop({ 
+    type: [{ type: Types.ObjectId, ref: 'Application' }], 
+    default: [] 
+  })
+  rejectedApplications: Types.ObjectId[];
+
   // Privacy Settings
   @Prop({ type: Boolean, default: true })
   isProfilePublic?: boolean;
@@ -205,3 +212,4 @@ CandidateSchema.index({ email: 1 }, { unique: true });
 CandidateSchema.index({ skills: 1 });
 CandidateSchema.index({ 'experience.technologies': 1 });
 CandidateSchema.index({ isOpenToWork: 1 });
+CandidateSchema.index({ rejectedApplications: 1 });
