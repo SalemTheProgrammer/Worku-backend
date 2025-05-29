@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Job, JobDocument } from '../../schemas/job.schema';
 import { Candidate, CandidateDocument } from '../../schemas/candidate.schema';
+import { Application, ApplicationDocument } from '../../schemas/application.schema';
 import { CandidateResponseDto } from '../dto/candidate-response.dto';
 import { calculateTotalExperience } from '../utils/experience-calculator';
 
@@ -10,7 +11,8 @@ import { calculateTotalExperience } from '../utils/experience-calculator';
 export class JobCandidateService {
   constructor(
     @InjectModel(Job.name) private jobModel: Model<JobDocument>,
-    @InjectModel(Candidate.name) private candidateModel: Model<CandidateDocument>
+    @InjectModel(Candidate.name) private candidateModel: Model<CandidateDocument>,
+    @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>
   ) {}
 
   async getCandidateByJobId(jobId: string, candidateId: string): Promise<CandidateResponseDto> {
@@ -18,19 +20,23 @@ export class JobCandidateService {
       throw new NotFoundException('Invalid job ID or candidate ID');
     }
 
+    // First check if the application exists
+    const application = await this.applicationModel.findOne({
+      poste: new Types.ObjectId(jobId),
+      candidat: new Types.ObjectId(candidateId)
+    }).exec();
+
+    if (!application) {
+      throw new NotFoundException('Candidate has not applied for this job');
+    }
+
+    // Then get the job to verify it exists
     const job = await this.jobModel.findById(jobId).exec();
     if (!job) {
       throw new NotFoundException('Job not found');
     }
 
-    const isApplicant = job.applications.some(
-      (applicantId) => applicantId.toString() === candidateId
-    );
-
-    if (!isApplicant) {
-      throw new NotFoundException('Candidate has not applied for this job');
-    }
-
+    // Finally get the candidate details
     const candidate = await this.candidateModel.findById(candidateId)
       .select('-password')
       .populate('education')

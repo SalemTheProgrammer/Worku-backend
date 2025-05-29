@@ -21,10 +21,10 @@ export class Company {
   nomEntreprise: string;
 
   @Prop({ type: String, required: true, unique: true })
-  numeroRNE: string;
+  email: string;
 
   @Prop({ type: String, required: true, unique: true })
-  email: string;
+  numeroRNE: string;
 
   @Prop({ type: [String] })
   secteurActivite: string[];

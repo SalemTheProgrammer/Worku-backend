@@ -1,13 +1,16 @@
-import { Injectable, HttpException, HttpStatus, NotFoundException } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { Candidate, CandidateDocument } from '../schemas/candidate.schema';
+import { Skill } from '../schemas/skill.schema';
 import { OtpService } from '../otp/otp.service';
 import { ProfileSuggestionService } from '../services/profile-suggestion.service';
 import { TokenPayload } from '../interfaces/user.interface';
+import { EmailService } from '../email/email.service';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
 import { VerifyCandidateOtpDto } from './dto/verify-candidate-otp.dto';
 import { LoginCandidateDto } from './dto/login-candidate.dto';
@@ -18,7 +21,7 @@ import { ProfileSuggestionsResponseDto } from './dto/profile-suggestions.dto';
 
 @Injectable()
 export class CandidateService {
-  // --- Helper Methods ---
+  private readonly logger = new Logger(CandidateService.name);  // --- Helper Methods ---
   private generateTokens(candidate: CandidateDocument): { access_token: string; refresh_token: string } {
     const payload = { userId: candidate._id, email: candidate.email, role: 'candidate' };
     return {
@@ -32,6 +35,54 @@ export class CandidateService {
       }),
     };
   }
+  /**
+   * Validates and fixes skill objects to ensure they meet the schema requirements
+   * Particularly focuses on ensuring proficiencyLevel is properly set
+   * @param skills Array of skill objects to validate and fix
+   * @returns Array of fixed skill objects
+   */
+  private validateAndFixSkills(skills: any[]): Skill[] {
+    if (!skills || !Array.isArray(skills)) {
+      return [];
+    }
+
+    let fixedSkillsCount = 0;
+    const validatedSkills = skills.map(skill => {
+      // Skip if skill is invalid
+      if (!skill || typeof skill !== 'object') {
+        return skill;
+      }
+
+      // For language skills, ensure proficiencyLevel is set to a valid value
+      if (skill.isLanguage === true) {
+        const validLevels = ['Natif', 'Professionnel', 'Intermédiaire', 'Débutant', 
+                            'Native', 'Advanced', 'Intermediate', 'Beginner'];
+        
+        if (!skill.proficiencyLevel || !validLevels.includes(skill.proficiencyLevel)) {
+          fixedSkillsCount++;
+          this.logger.debug(`Fixed language skill: "${skill.name}" - Setting missing proficiencyLevel to "Intermédiaire"`);
+          return {
+            ...skill,
+            proficiencyLevel: 'Intermédiaire' // Default to Intermediate level
+          };
+        }
+      } 
+      // For non-language skills, we should keep proficiencyLevel undefined, not set it to null
+      else if (skill.proficiencyLevel === undefined) {
+        fixedSkillsCount++;
+        // Just return the skill as is, don't explicitly set proficiencyLevel to anything
+        return skill;
+      }
+      
+      return skill;
+    });
+    
+    if (fixedSkillsCount > 0) {
+      this.logger.log(`Fixed proficiencyLevel for ${fixedSkillsCount} skills`);
+    }
+    
+    return validatedSkills as Skill[];
+  }
 
   constructor(
     @InjectModel(Candidate.name) private candidateModel: Model<CandidateDocument>,
@@ -39,6 +90,7 @@ export class CandidateService {
     private otpService: OtpService,
     private configService: ConfigService,
     private profileSuggestionService: ProfileSuggestionService,
+    private emailService: EmailService,
   ) {}
 
   // --- Profile Suggestions ---
@@ -54,7 +106,7 @@ export class CandidateService {
       experience: candidate.experience,
       skills: candidate.skills,
       certifications: candidate.certifications,
-      professionalStatus: candidate.professionalStatus,
+      professionalStatus: candidate.professionalStatus || 'NOT_AVAILABLE',
       workPreferences: candidate.workPreferences,
       industryPreferences: candidate.industryPreferences,
       yearsOfExperience: candidate.yearsOfExperience,
@@ -117,7 +169,7 @@ export class CandidateService {
 
   // --- Authentication ---
   async register(registerCandidateDto: RegisterCandidateDto): Promise<void> {
-    const { email, password } = registerCandidateDto;
+    const { email, password, ...rest } = registerCandidateDto;
 
     const existingCandidate = await this.candidateModel.findOne({ email });
     if (existingCandidate) {
@@ -125,13 +177,41 @@ export class CandidateService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const candidate = new this.candidateModel({
-      ...registerCandidateDto,
-      password: hashedPassword,
-    });
 
-    await candidate.save();
-    await this.otpService.sendOtp(email);
+    // Create candidate document with explicit undefined for phone
+    const candidateData = {
+      email,
+      password: hashedPassword,
+      firstName: rest.firstName,
+      lastName: rest.lastName,
+      employmentStatus: rest.employmentStatus,
+      professionalStatus: rest.professionalStatus,
+      availabilityDate: rest.availabilityDate,
+      phone: undefined // Explicitly set phone to undefined
+    };
+
+    try {
+      // Try to drop the phone index first
+      try {
+        await this.candidateModel.collection.dropIndex('phone_1');
+      } catch (indexError) {
+        // Ignore error if index doesn't exist
+      }
+
+      // Create and save the new candidate
+      const candidate = new this.candidateModel(candidateData);
+      await candidate.save();
+      await this.otpService.sendOtp(email);
+    } catch (error) {
+      if (error.code === 11000) {
+        // If we still get a duplicate key error, throw a more specific error
+        throw new HttpException(
+          'Unable to register candidate at this time. Please try again later.',
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+      throw error;
+    }
   }
 
   async verifyOtp(verifyCandidateOtpDto: VerifyCandidateOtpDto): Promise<{ message: string }> {
@@ -270,15 +350,10 @@ export class CandidateService {
     await candidate.save();
   }
   // --- Account Management ---
-  async deleteAccount(userId: string, password: string): Promise<void> {
+  async deleteAccount(userId: string): Promise<void> {
     const candidate = await this.candidateModel.findById(userId);
     if (!candidate) {
       throw new NotFoundException('Candidate not found');
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, candidate.password);
-    if (!isPasswordValid) {
-      throw new HttpException('Invalid password', HttpStatus.UNAUTHORIZED);
     }
 
     // Clean up uploaded files
@@ -289,5 +364,75 @@ export class CandidateService {
 
     // Delete the candidate document
     await this.candidateModel.findByIdAndDelete(userId);
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const candidate = await this.candidateModel.findOne({ email });
+    if (!candidate) {
+      throw new NotFoundException('No account found with this email');
+    }
+
+    const token = this.jwtService.sign(
+      { userId: candidate._id, email: candidate.email, type: 'password_reset' },
+      {
+        secret: this.configService.get('jwt.secret'),
+        expiresIn: '1h'
+      }
+    );
+
+    await this.emailService.sendPasswordResetEmail(email, token);
+  }  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
+    try {
+      const decoded = this.jwtService.verify(resetPasswordDto.token, {
+        secret: this.configService.get('jwt.secret')
+      }) as TokenPayload & { type: string };
+
+      if (decoded.type !== 'password_reset') {
+        throw new UnauthorizedException('Invalid reset token');
+      }
+
+      const candidate = await this.candidateModel.findById(decoded.userId);
+      if (!candidate) {
+        throw new NotFoundException('Candidate not found');
+      }
+
+      // Fix skills validation issue by ensuring all skills have a valid proficiencyLevel
+      if (candidate.skills && Array.isArray(candidate.skills)) {
+        this.logger.log(`Validating ${candidate.skills.length} skills for candidate ${candidate._id}`);
+        candidate.skills = this.validateAndFixSkills(candidate.skills);
+      }
+
+      const hashedPassword = await bcrypt.hash(resetPasswordDto.newPassword, 10);
+      candidate.password = hashedPassword;
+      
+      try {
+        await candidate.save();
+        this.logger.log(`Password reset successful for candidate ${candidate._id}`);
+      } catch (saveError) {
+        this.logger.error(`Error saving candidate during password reset: ${saveError.message}`, saveError.stack);
+        
+        // If there's still a validation error, try a different approach
+        if (saveError.name === 'ValidationError' && saveError.message.includes('proficiencyLevel')) {
+          this.logger.warn('Still encountering validation errors, attempting direct update');
+          
+          // Update password directly with updateOne to bypass schema validation issues
+          await this.candidateModel.updateOne(
+            { _id: candidate._id },
+            { $set: { password: hashedPassword } }
+          );
+          this.logger.log(`Password reset completed using direct update for candidate ${candidate._id}`);
+        } else {
+          // Re-throw any other errors
+          throw saveError;
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Password reset failed: ${error.message}`, error.stack);
+      
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('Invalid or expired reset token');
+      }
+      throw error;
+    }
   }
 }

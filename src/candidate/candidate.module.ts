@@ -3,12 +3,15 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EmailModule } from '../email/email.module';
+import { ApplicationModule } from '../application/application.module';
 import { CandidateController } from './candidate.controller';
 import { CandidateAuthController } from './auth/candidate-auth.controller';
 import { CandidateService } from './candidate.service';
 import { CandidateFileService } from './candidate-file.service';
 import { CandidateFilesController } from './candidate-files.controller';
 import { CandidateProfileController } from './candidate-profile.controller';
+import { CandidateApplicationsController } from './candidate-applications.controller';
 import { SkillController } from './controllers/skill.controller';
 import { SkillService } from './services/skill.service';
 import { EducationController } from './controllers/education.controller';
@@ -56,14 +59,14 @@ import { JournalModule } from '../journal/journal.module';
         },
         removeOnComplete: true
       },
-    }),
-    ConfigModule,
+    }),    ConfigModule,
     OtpModule,
     forwardRef(() => CvProfileExtractorModule),
     GeminiModule,
-    JournalModule
-  ],
-  controllers: [
+    JournalModule,
+    EmailModule,
+    ApplicationModule
+  ],  controllers: [
     CandidateController,
     CandidateFilesController,
     CandidateProfileController,
@@ -71,6 +74,7 @@ import { JournalModule } from '../journal/journal.module';
     EducationController,
     SkillController,
     CertificationController,
+    CandidateApplicationsController,
   ],
   providers: [
     CandidateService,

@@ -7,7 +7,6 @@ export interface CompanyResponse {
   nomUtilisateur: string | null;
   role: UserRole;
   nomEntreprise: string;
-  numeroRNE: string;
   email: string;
   secteurActivite?: string[];
   tailleEntreprise?: string;

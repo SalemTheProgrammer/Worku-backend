@@ -49,7 +49,7 @@ export class Job {
   @Prop({
     type: {
       vacantPosts: { type: Number, required: true },
-      activityDomain: { type: String, required: true },
+      activityDomain: { type: String, required: false }, // Made optional
       contractType: { type: String, required: true },
       availability: { type: String, required: true },
       workLocation: { type: String, required: true },

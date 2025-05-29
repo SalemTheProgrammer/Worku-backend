@@ -68,7 +68,6 @@ export class CompanyController {
     tokens: { accessToken: string; refreshToken: string };
     entreprise: {
       nomEntreprise: string;
-      numeroRNE: string;
       email: string;
     };
   }> {
@@ -79,7 +78,6 @@ export class CompanyController {
       tokens,
       entreprise: {
         nomEntreprise: company.nomEntreprise,
-        numeroRNE: company.numeroRNE,
         email: company.email,
       },
     };
@@ -111,7 +109,6 @@ export class CompanyController {
     tokens: { accessToken: string; refreshToken: string };
     entreprise: {
       nomEntreprise: string;
-      numeroRNE: string;
       email: string;
     };
   }> {
@@ -122,7 +119,6 @@ export class CompanyController {
       tokens,
       entreprise: {
         nomEntreprise: company.nomEntreprise,
-        numeroRNE: company.numeroRNE,
         email: company.email,
       },
     };

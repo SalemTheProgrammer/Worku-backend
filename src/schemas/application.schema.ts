@@ -162,3 +162,6 @@ export const ApplicationSchema = SchemaFactory.createForClass(Application);
 
 // Add index on isRejected field for better query performance
 ApplicationSchema.index({ isRejected: 1 });
+
+// Add compound index on candidat and poste fields for better query performance
+ApplicationSchema.index({ candidat: 1, poste: 1 });

@@ -12,13 +12,11 @@ export class RegisterCompanyDto {
   readonly nomEntreprise: string;
 
   @ApiProperty({
-    description: 'Numéro RNE (Registre National des Entreprises)',
+    description: "Numéro RNE de l'entreprise",
     example: 'RNE123456789'
   })
-  @IsString({ message: 'Le numéro RNE doit être une chaîne de caractères' })
-  @Matches(/^RNE\d{9}$/, {
-    message: 'Le numéro RNE doit commencer par "RNE" suivi de 9 chiffres'
-  })
+  @IsString({ message: "Le numéro RNE doit être une chaîne de caractères" })
+  @MinLength(3, { message: "Le numéro RNE doit contenir au moins 3 caractères" })
   readonly numeroRNE: string;
 
   @ApiProperty({
@@ -28,8 +26,6 @@ export class RegisterCompanyDto {
   @IsEmail({}, { message: "L'adresse email n'est pas valide" })
   @IsBusinessEmail()
   readonly email: string;
-
- 
 }
 
 export class VerifyCompanyOtpDto {

@@ -3,7 +3,6 @@ import { Request as ExpressRequest } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CandidateService } from './candidate.service';
-import { DeleteAccountDto } from './dto/delete-account.dto';
 import { UpdatePersonalInfoDto } from './dto/update-personal-info.dto';
 import { ProfileSuggestionsResponseDto } from './dto/profile-suggestions.dto';
 
@@ -210,9 +209,9 @@ export class CandidateController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized - Invalid password' })
   @ApiResponse({ status: 404, description: 'Not Found - Account not found' })
-  async deleteAccount(@Request() req: RequestWithUser, @Body() deleteAccountDto: DeleteAccountDto) {
+  async deleteAccount(@Request() req: RequestWithUser) {
     try {
-      await this.candidateService.deleteAccount(req.user.userId, deleteAccountDto.password);
+      await this.candidateService.deleteAccount(req.user.userId);
       return { message: 'Account deleted successfully' };
     } catch (error) {
       throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);

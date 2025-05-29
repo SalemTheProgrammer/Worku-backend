@@ -6,7 +6,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types, FilterQuery, PopulateOptions } from 'mongoose';
+import { Model, Types, FilterQuery, PopulateOptions, FlattenMaps } from 'mongoose';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
 import { Job, JobDocument } from '../schemas/job.schema';
 import { Candidate, CandidateDocument } from '../schemas/candidate.schema';
@@ -39,9 +39,6 @@ export class ApplicationService implements IApplicationService {
     private readonly analysisQueue: Queue
   ) {}
 
-  /**
-   * Delete a single application and remove its reference from the related job
-   */
   async deleteApplication(id: string): Promise<void> {
     const session = await this.applicationModel.startSession();
     session.startTransaction();
@@ -54,14 +51,12 @@ export class ApplicationService implements IApplicationService {
         throw new NotFoundException(`Application ${id} not found`);
       }
 
-      // Pull this application out of the job's applications array
       await this.jobModel.findByIdAndUpdate(
         application.poste,
         { $pull: { applications: application._id } },
         { session }
       );
 
-      // Delete the application document
       await this.applicationModel.findByIdAndDelete(id).session(session);
 
       await session.commitTransaction();
@@ -107,18 +102,16 @@ export class ApplicationService implements IApplicationService {
     try {
       this.logger.debug(`Creating application: candidate=${candidateId}, job=${jobId}`);
 
-      // Prevent duplicates
       const exists = await this.applicationModel
         .findOne({ candidat: candidateId, poste: jobId })
         .session(session);
       if (exists) {
         throw new HttpException(
           'You have already applied for this position',
-          HttpStatus.BAD_REQUEST
+          HttpStatus.CONFLICT
         );
       }
 
-      // Validate job & candidate
       const [job, candidate] = await Promise.all([
         this.jobModel.findById(jobId).session(session),
         this.candidateModel.findById(candidateId).session(session)
@@ -126,20 +119,18 @@ export class ApplicationService implements IApplicationService {
       if (!job) throw new NotFoundException('Job posting not found');
       if (!candidate) throw new NotFoundException('Candidate not found');
 
-      // Validate company
       const company = await this.companyModel
         .findById(job.companyId)
         .session(session);
       if (!company) throw new NotFoundException('Company not found');
 
-      // Build the application record
       const applicationData: Partial<ApplicationDocument> = {
         candidat: new Types.ObjectId(candidateId),
         poste: new Types.ObjectId(jobId),
         companyId: job.companyId,
         datePostulation: new Date(),
         statut: 'en_attente',
-        isRejected: false, // Initialize the isRejected flag to false
+        isRejected: false,
         analyse: {
           scoreDAdéquation: {
             global: 0,
@@ -169,13 +160,11 @@ export class ApplicationService implements IApplicationService {
         }
       };
 
-      // Persist it
       const [created] = await this.applicationModel.create(
         [applicationData],
         { session }
       );
 
-      // Link candidate on the job document
       await this.jobModel.findByIdAndUpdate(
         jobId,
         { $addToSet: { applications: created._id } },
@@ -185,7 +174,6 @@ export class ApplicationService implements IApplicationService {
       await session.commitTransaction();
       this.logger.log(`Application ${created._id} saved`);
 
-      // Enqueue analysis job
       await this.analysisQueue.add('analyze', {
         applicationId: created._id.toString()
       });
@@ -214,9 +202,9 @@ export class ApplicationService implements IApplicationService {
     if (!application) {
       throw new NotFoundException(`Application ${id} not found`);
     }
-    return application as any;
-  }  
-  
+    return application as FlattenMaps<ApplicationDocument>;
+  }
+
   async getApplicationsByCandidate(
     candidateId: string,
     filters?: FilterApplicationsDto
@@ -227,7 +215,7 @@ export class ApplicationService implements IApplicationService {
       [
         { path: 'candidat', select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience' },
         { path: 'poste', select: 'title _id' },
-        { path: 'companyId', select: '_id' }
+        { path: 'companyId', select: '_id nomEntreprise' }
       ]
     );
   }
@@ -242,13 +230,12 @@ export class ApplicationService implements IApplicationService {
     const sortDir: 1 | -1 = filters.sortOrder === 'asc' ? 1 : -1;
 
     try {
-      // Always exclude rejected applications
       const finalQuery = {
         ...baseQuery,
         isRejected: { $ne: true }
       };
 
-      const [applications, total] = await Promise.all([
+      const [applicationsResult, total] = await Promise.all([
         this.applicationModel
           .find(finalQuery)
           .populate(populateOpts)
@@ -260,6 +247,8 @@ export class ApplicationService implements IApplicationService {
         this.applicationModel.countDocuments(finalQuery)
       ]);
 
+      const applications = applicationsResult as Required<ApplicationDocument>[];
+
       return { applications, total };
     } catch (err) {
       this.logger.error('Error in findWithFilters', err);
@@ -269,20 +258,44 @@ export class ApplicationService implements IApplicationService {
       );
     }
   }
-  
+
   async getApplicationsByCompany(
     companyId: string,
     filters: FilterApplicationsDto
   ): Promise<GetApplicationsResult> {
-    const query: any = { companyId: new Types.ObjectId(companyId) };
-    if (filters.jobId) {
-      query.poste = new Types.ObjectId(filters.jobId);
+    try {
+      const companyExists = await this.companyModel.exists({ _id: companyId });
+      if (!companyExists) {
+        throw new NotFoundException(`Company ${companyId} not found`);
+      }
+
+      const query = { companyId: new Types.ObjectId(companyId) } as FilterQuery<ApplicationDocument>;
+      if (filters.jobId) {
+        const job = await this.jobModel.findOne({
+          _id: filters.jobId,
+          companyId: companyId
+        });
+        if (!job) {
+          throw new NotFoundException(`Job ${filters.jobId} not found or doesn't belong to company`);
+        }
+        query.poste = new Types.ObjectId(filters.jobId);
+      }
+
+      return this.findWithFilters(query, filters, [
+        { path: 'candidat', select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience' },
+        { path: 'poste', select: 'title _id requirements' },
+        { path: 'companyId', select: '_id nomEntreprise logo' }
+      ]);
+    } catch (error) {
+      this.logger.error('Error in getApplicationsByCompany', error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Error retrieving applications',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
-    return this.findWithFilters(query, filters, [
-      { path: 'candidat', select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience' },
-      { path: 'poste', select: 'title _id' },
-      { path: 'companyId', select: '_id' }
-    ]);
   }
 
   async getApplicationsByJob(
@@ -298,9 +311,74 @@ export class ApplicationService implements IApplicationService {
       filters,
       [
         { path: 'candidat', select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience' },
-        { path: 'poste', select: 'title _id' },
-        { path: 'companyId', select: '_id' }
+        { path: 'poste', select: 'title _id requirements' },
+        { path: 'companyId', select: '_id nomEntreprise logo' }
       ]
     );
+  }
+
+  async getApplicationByCandidateAndJob(
+    jobId: string,
+    candidateId: string
+  ): Promise<ApplicationDocument> {
+    try {
+      this.logger.debug(`Looking for application - jobId: ${jobId}, candidateId: ${candidateId}`);
+
+      const allCandidateApps = await this.applicationModel
+        .find({ candidat: new Types.ObjectId(candidateId) })
+        .lean()
+        .exec();
+
+      this.logger.debug(`Found ${allCandidateApps.length} total applications for candidate`);
+      
+      const jobIds = allCandidateApps.map(app => app.poste.toString());
+      this.logger.debug('All job IDs for candidate:', jobIds);
+
+      const application = await this.applicationModel
+        .findOne({
+          poste: new Types.ObjectId(jobId),
+          candidat: new Types.ObjectId(candidateId)
+        })
+        .populate({
+          path: 'candidat',
+          select: 'firstName lastName email phone location profileImage cv title skills yearsOfExperience'
+        })
+        .populate({
+          path: 'poste',
+          select: 'title _id requirements'
+        })
+        .populate({
+          path: 'companyId',
+          select: '_id nomEntreprise'
+        })
+        .lean()
+        .exec();
+
+      if (!application) {
+        this.logger.debug('Detailed search failed. Checking ObjectId conversion:');
+        this.logger.debug('Job ObjectId:', new Types.ObjectId(jobId).toString());
+        this.logger.debug('Candidate ObjectId:', new Types.ObjectId(candidateId).toString());
+        
+        throw new NotFoundException('Candidate has not applied for this job');
+      }
+
+      this.logger.debug('Found application:', {
+        applicationId: application._id,
+        status: application.statut,
+        jobId: application.poste?._id,
+        candidateId: application.candidat?._id
+      });
+
+      return application as FlattenMaps<ApplicationDocument>;
+    } catch (error) {
+      this.logger.error('Error in getApplicationByCandidateAndJob:', error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Error retrieving application',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }

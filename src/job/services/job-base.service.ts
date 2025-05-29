@@ -35,10 +35,12 @@ export class JobBaseService {
         throw new BadRequestException(
           'You have reached the maximum limit of 5 free job postings. Please upgrade your plan to post more jobs.'
         );
-      }
-
+      }      // Extract compensation properties from nested structure to match the flat schema
+      const { compensation, ...restJobData } = createJobDto;
+      
       const job = new this.jobModel({
-        ...createJobDto,
+        ...restJobData,
+        ...(compensation || {}), // Add compensation properties at the top level
         companyId: new Types.ObjectId(companyId),
         expiresAt: createJobDto.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         applications: [],
@@ -196,6 +198,10 @@ export class JobBaseService {
       throw new UnauthorizedException('You are not authorized to delete this job');
     }
 
+    // First mark the job as inactive
+    await this.jobModel.findByIdAndUpdate(jobId, { isActive: false }).exec();
+
+    // Then delete the job
     await this.jobModel.findByIdAndDelete(jobId).exec();
     await this.jobCacheService.invalidateJobCache(jobId);
     

@@ -42,11 +42,15 @@ export class Candidate extends Document {
   @Prop()
   dateOfBirth?: Date;
 
-  @Prop()
+  @Prop({
+    type: String,
+    default: undefined,
+    set: v => v === null ? undefined : v
+  })
   phone?: string;
 
-  @Prop({ required: true, type: String, enum: ProfessionalStatus })
-  professionalStatus: ProfessionalStatus;
+  @Prop({ type: String, enum: ProfessionalStatus })
+  professionalStatus?: ProfessionalStatus;
 
   @Prop({ type: Date })
   availabilityDate?: Date;
@@ -213,3 +217,12 @@ CandidateSchema.index({ skills: 1 });
 CandidateSchema.index({ 'experience.technologies': 1 });
 CandidateSchema.index({ isOpenToWork: 1 });
 CandidateSchema.index({ rejectedApplications: 1 });
+
+// Add pre-save middleware to handle phone field
+CandidateSchema.pre('save', function(next) {
+  // If phone is null, set it to undefined to prevent indexing
+  if (this.phone === null) {
+    this.phone = undefined;
+  }
+  next();
+});

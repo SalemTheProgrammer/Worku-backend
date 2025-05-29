@@ -123,6 +123,12 @@ export class ApplicationController {
     @Query() filters: FilterApplicationsDto,
   ): Promise<ApiResponseData<JobApplicationsListResponseDto>> {
     try {
+      // Add role validation
+      if (!req.user || !['admin', 'company'].includes(req.user.role?.toLowerCase())) {
+        this.logger.error(`Unauthorized access attempt - user role: ${req.user?.role}`);
+        throw new HttpException('Unauthorized - Company access required', HttpStatus.FORBIDDEN);
+      }
+
       const result = await this.applicationService.getApplicationsByCompany(
         req.user.userId,
         filters,
@@ -272,22 +278,26 @@ export class ApplicationController {
   // Add a helper method to transform applications to response DTOs
   private mapApplicationToResponseDto(app: any): JobApplicationResponseDto {
     try {
+      if (!app) {
+        throw new Error('Application document is null or undefined');
+      }
+
       // The application document may have populated fields
-      const candidate = typeof app.candidat === 'object' ? app.candidat : { _id: app.candidat };
-      const job = typeof app.poste === 'object' ? app.poste : { _id: app.poste };
-      const company = typeof app.companyId === 'object' ? app.companyId : { _id: app.companyId };
+      const candidate = app.candidat ? (typeof app.candidat === 'object' ? app.candidat : { _id: app.candidat }) : { _id: null };
+      const job = app.poste ? (typeof app.poste === 'object' ? app.poste : { _id: app.poste }) : { _id: null };
+      const company = app.companyId ? (typeof app.companyId === 'object' ? app.companyId : { _id: app.companyId }) : { _id: null };
       
       return {
-        applicationId: app._id?.toString() || '',
+        applicationId: app._id ? app._id.toString() : '',
         candidate: {
-          id: candidate._id?.toString() || '',
+          id: candidate._id ? candidate._id.toString() : '',
           fullName: candidate.firstName && candidate.lastName ?
                   `${candidate.firstName} ${candidate.lastName}`.trim() : '',
           email: candidate.email || '',
           phone: candidate.phone || ''
         },
-        jobId: job._id?.toString() || '',
-        companyId: company._id?.toString() || '',
+        jobId: job._id ? job._id.toString() : '',
+        companyId: company._id ? company._id.toString() : '',
         status: app.statut || 'en_attente',
         appliedAt: app.datePostulation || new Date(),
         matchedKeywords: app.analyse?.matchedKeywords || [],

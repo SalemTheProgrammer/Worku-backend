@@ -337,4 +337,47 @@ export class JobApplicationsController {
       throw error;
     }
   }
+
+  @Get(':jobId/candidate/:candidateId/application')
+  @ApiOperation({
+    summary: 'Get candidate application for specific job',
+    description: 'Get details of a specific candidate\'s application for a job'
+  })
+  @ApiParam({
+    name: 'jobId',
+    description: 'ID of the job',
+    example: '507f1f77bcf86cd799439011'
+  })
+  @ApiParam({
+    name: 'candidateId',
+    description: 'ID of the candidate',
+    example: '507f1f77bcf86cd799439012'
+  })
+  @SwaggerApi({
+    status: 200,
+    description: 'Application retrieved successfully',
+    type: JobApplicationResponseDto
+  })
+  @SwaggerApi({ status: 401, description: 'Non autorisé - Token invalide' })
+  @SwaggerApi({ status: 404, description: 'Application non trouvée' })
+  @UseInterceptors(TransformInterceptor)
+  async getCandidateApplicationForJob(
+    @Param('jobId') jobId: string,
+    @Param('candidateId') candidateId: string
+  ): Promise<ApiResponseData<JobApplicationResponseDto>> {
+    try {
+      const application = await this.applicationService.getApplicationByCandidateAndJob(jobId, candidateId);
+      const mappedApplication = this.mapToResponseDto(application);
+
+      return {
+        statusCode: 200,
+        message: 'Application retrieved successfully',
+        data: mappedApplication,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get application for job ${jobId} and candidate ${candidateId}: ${error.message}`, error);
+      throw new HttpException(error.message, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

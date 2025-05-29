@@ -12,6 +12,7 @@ import { JobQueryService } from './services/job-query.service';
 import { Job, JobSchema } from '../schemas/job.schema';
 import { JobView, JobViewSchema } from '../schemas/job-view.schema';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
+import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { RedisCacheModule } from '../cache/cache.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JobMapperImpl } from './interfaces/job-mapper.interface';
@@ -20,7 +21,8 @@ import { JournalModule } from '../journal/journal.module';
 const schemas = [
   { name: Job.name, schema: JobSchema },
   { name: JobView.name, schema: JobViewSchema },
-  { name: Candidate.name, schema: CandidateSchema }
+  { name: Candidate.name, schema: CandidateSchema },
+  { name: Application.name, schema: ApplicationSchema }
 ];
 
 const services = [

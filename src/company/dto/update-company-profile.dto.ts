@@ -22,14 +22,6 @@ class SocialLinks {
 export class UpdateCompanyProfileDto {
   @IsString()
   @IsOptional()
-  phone?: string;
-
-  @IsString()
-  @IsOptional()
-  adresse?: string;
-
-  @IsString()
-  @IsOptional()
   raisonSociale?: string;
 
   @IsOptional()

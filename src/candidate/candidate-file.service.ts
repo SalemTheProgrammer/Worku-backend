@@ -118,10 +118,9 @@ export class CandidateFileService {
       // Basic validation of file format
       await fs.access(absolutePath);
       
-      // Queue both CV analysis and profile extraction jobs for background processing
-      await this.cvAnalysisQueue.addCvAnalysisJob(absolutePath, userId);
+      // Only queue profile extraction job for CV upload
       await this.cvAnalysisQueue.addProfileExtractionJob(absolutePath, userId);
-      this.logger.log(`Queued CV analysis, skill extraction, and profile extraction for candidate ${userId}`);
+      this.logger.log(`Queued profile extraction for candidate ${userId}`);
     } catch (error) {
       // If validation fails, clean up and throw error
       await this.safeUnlink(absolutePath);

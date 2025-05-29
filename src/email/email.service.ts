@@ -6,6 +6,7 @@ import { generateAnalysisResultsTemplate } from '../email-templates/analysis-res
 import { generateApplicationConfirmationTemplate } from '../email-templates/application-confirmation.template';
 import { InvitationEmailData } from './interfaces/invitation-email.interface';
 import { generateInterviewConfirmationEmail } from '../email-templates/interview-confirmation.template';
+import { createPasswordResetEmailTemplate } from '../email-templates/password-reset.template';
 import * as handlebars from 'handlebars';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -55,34 +56,6 @@ export class EmailService {
     }
   }
 
-  async sendApplicationConfirmation(email: string, applicationDetails: {
-    jobTitle: string;
-    companyName: string;
-  }): Promise<void> {
-    const subject = 'Confirmation de votre candidature';
-    const html = generateApplicationConfirmationTemplate(applicationDetails);
-    await this.sendEmail(email, subject, html);
-  }
-
-  /**
-   * Send a rejection email to a candidate
-   * @param email Candidate's email
-   * @param subject Email subject
-   * @param html Email HTML content
-   */
-  async sendRejectionEmail(email: string, subject: string, html: string): Promise<void> {
-    try {
-      await this.sendEmail(email, subject, html);
-      this.logger.log(`Rejection email sent successfully to ${email}`);
-    } catch (error) {
-      this.logger.error(`Failed to send rejection email to ${email}: ${error.message}`);
-      throw new HttpException(
-        'Failed to send rejection email',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
     if (!this.isEmailEnabled) {
       this.logger.log(`[Email Disabled] Would send email to ${to} with subject: ${subject}`);
@@ -99,7 +72,63 @@ export class EmailService {
       this.logger.log(`Email sent successfully to ${to}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${to}: ${error.message}`);
-      // Don't throw the error - we don't want email failures to affect the application process
+      throw new HttpException(
+        'Failed to send email',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  async sendPasswordResetEmail(to: string, token: string): Promise<void> {
+    if (!this.isEmailEnabled) {
+      this.logger.warn(`[Email Disabled] Would send password reset email to ${to}`);
+      return;
+    }
+
+    try {
+      const frontendUrl = this.configService.get<string>('FRONTNED_URL');
+      if (!frontendUrl) {
+        throw new Error('Frontend URL not configured');
+      }
+
+      const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+      const html = createPasswordResetEmailTemplate(resetLink);
+      
+      await this.sendEmail(
+        to,
+        'Reset Your Password',
+        html
+      );
+      
+      this.logger.log(`Password reset email sent successfully to ${to}`);
+    } catch (error) {
+      this.logger.error(`Failed to send password reset email: ${error.message}`);
+      throw new HttpException(
+        'Failed to send password reset email',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  async sendApplicationConfirmation(email: string, applicationDetails: {
+    jobTitle: string;
+    companyName: string;
+  }): Promise<void> {
+    const subject = 'Confirmation de votre candidature';
+    const html = generateApplicationConfirmationTemplate(applicationDetails);
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendRejectionEmail(email: string, subject: string, html: string): Promise<void> {
+    try {
+      await this.sendEmail(email, subject, html);
+      this.logger.log(`Rejection email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send rejection email to ${email}: ${error.message}`);
+      throw new HttpException(
+        'Failed to send rejection email',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -114,22 +143,18 @@ export class EmailService {
     }
   ): Promise<void> {
     try {
-      // Read the invitation template from src directory
       const templatePath = path.join(process.cwd(), 'src/email-templates/invite-user.template.html');
       const templateContent = fs.readFileSync(templatePath, 'utf8');
       const template = handlebars.compile(templateContent);
 
-      // Prepare template data
       const templateData = {
         ...invitationData,
         platformLogo: 'https://your-platform-logo-url.com/logo.png',
         currentYear: new Date().getFullYear()
       };
 
-      // Generate HTML content
       const html = template(templateData);
 
-      // Send the email
       await this.sendEmail(
         to,
         'Invitation à rejoindre une entreprise sur Worku',
@@ -171,9 +196,6 @@ export class EmailService {
       this.logger.log(`Interview confirmation email sent successfully to ${to}`);
     } catch (error) {
       this.logger.error(`Failed to send interview confirmation email: ${error.message}`);
-      if (error instanceof HttpException) {
-        throw error;
-      }
       throw new HttpException(
         'Failed to send interview confirmation email',
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -194,9 +216,6 @@ export class EmailService {
       );
     } catch (error) {
       this.logger.error(`Failed to send analysis results email: ${error.message}`);
-      if (error instanceof HttpException) {
-        throw error;
-      }
       throw new HttpException(
         'Failed to send analysis results email',
         HttpStatus.INTERNAL_SERVER_ERROR

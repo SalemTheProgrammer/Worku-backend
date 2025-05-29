@@ -28,7 +28,6 @@ export class CompanyAuthService {
       nomUtilisateur: nomDeUtilisateur, // Add alias field
       role,
       nomEntreprise: companyData.nomEntreprise,
-      numeroRNE: companyData.numeroRNE,
       email: companyData.email,
       secteurActivite: companyData.secteurActivite,
       tailleEntreprise: companyData.tailleEntreprise,
@@ -54,7 +53,7 @@ export class CompanyAuthService {
   }
 
   async registerCompany(registerCompanyDto: RegisterCompanyDto): Promise<void> {
-    const { email, nomEntreprise, numeroRNE } = registerCompanyDto;
+    const { email, nomEntreprise } = registerCompanyDto;
 
     try {
       const normalizedEmail = email.toLowerCase().trim();
@@ -71,15 +70,6 @@ export class CompanyAuthService {
         throw new ConflictException('Cet email est déjà utilisé par une entreprise');
       }
 
-      // Check RNE separately
-      console.log('Checking for existing RNE:', numeroRNE);
-      const existingRNE = await this.companyModel.findOne({ numeroRNE });
-      console.log('Existing RNE:', existingRNE);
-
-      if (existingRNE) {
-        throw new ConflictException('Ce numéro RNE est déjà utilisé');
-      }
-
       // Check if email is used by a candidate
       const candidateModel = this.companyModel.db.model('Candidate');
       const existingCandidate = await candidateModel.findOne({
@@ -90,12 +80,21 @@ export class CompanyAuthService {
         throw new ConflictException('Cet email est déjà utilisé par un candidat');
       }
 
+      // Check if RNE number already exists
+      const existingRNE = await this.companyModel.findOne({
+        numeroRNE: registerCompanyDto.numeroRNE
+      });
+
+      if (existingRNE) {
+        throw new ConflictException('Ce numéro RNE est déjà utilisé par une autre entreprise');
+      }
+
       // Create the company document
-      console.log('Creating new company:', { nomEntreprise, numeroRNE, email });
+      console.log('Creating new company:', { nomEntreprise, email, numeroRNE: registerCompanyDto.numeroRNE });
       const company = new this.companyModel({
         nomEntreprise,
-        numeroRNE,
         email: email.toLowerCase(), // Store email in lowercase
+        numeroRNE: registerCompanyDto.numeroRNE,
         verified: false,
         profileCompleted: false,
         invitedUsers: [],

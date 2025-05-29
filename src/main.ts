@@ -99,9 +99,6 @@ async function bootstrap() {
       message: 'Too many requests from this IP, please try again later'
     }));
 
-    // CORS configuration
-    // Security middleware configuration
-
     // Global pipes, interceptors, and filters
     app.useGlobalPipes(
       new ValidationPipe({
@@ -132,6 +129,7 @@ async function bootstrap() {
         .addTag('candidate', 'Candidate profile and management')
         .addTag('applications', 'Job applications and analysis')
         .addTag('job', 'Job posting and application')
+        .addTag('recommended-jobs', 'Job recommendations for candidates')
         .addTag('Profile Picture', 'Candidate profile picture management')
         .addTag('CV', 'Candidate CV management')
         .addTag('interviews', 'Interview scheduling and management')

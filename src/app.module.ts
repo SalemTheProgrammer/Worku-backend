@@ -16,6 +16,7 @@ import { GeminiModule } from './services/gemini.module';
 import { InterviewModule } from './interview/interview.module';
 import { JournalModule } from './journal/journal.module';
 import { RejectionModule } from './rejection/rejection.module';
+import { RecommendedJobsModule } from './recommended-jobs/recommended-jobs.module';
 import configuration from './common/config/configuration';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -97,6 +98,7 @@ import { AppService } from './app.service';
     InterviewModule,
     JournalModule,
     RejectionModule,
+    RecommendedJobsModule,
   ],
   providers: [
     AppService,

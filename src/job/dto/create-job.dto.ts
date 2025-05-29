@@ -54,10 +54,10 @@ export class JobDetailsDto {
   @Min(1)
   vacantPosts: number;
 
-  @ApiProperty({ description: 'Domain of activity' })
+  @ApiPropertyOptional({ description: 'Domain of activity' })
   @IsString()
-  @IsNotEmpty()
-  activityDomain: string;
+  @IsOptional()
+  activityDomain?: string;
 
   @ApiProperty({ description: 'Type of contract' })
   @IsString()

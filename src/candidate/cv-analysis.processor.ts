@@ -2,7 +2,6 @@ import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { ConfigService } from '@nestjs/config';
-import { CVAnalysisService } from '../services/cv-analysis.service';
 import { CvSkillsService } from './services/cv-skills.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -14,7 +13,6 @@ export class CvAnalysisProcessor {
 
   constructor(
     @InjectModel(Candidate.name) private readonly candidateModel: Model<Candidate>,
-    private readonly cvAnalysisService: CVAnalysisService,
     private readonly cvSkillsService: CvSkillsService,
     private readonly configService: ConfigService,
   ) {}

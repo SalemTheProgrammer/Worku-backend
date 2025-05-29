@@ -31,7 +31,7 @@ export interface JobEntity extends Document {
   };
   jobDetails: {
     vacantPosts: number;
-    activityDomain: string;
+    activityDomain?: string; // Made optional
     contractType: string;
     availability: string;
     workLocation: string;

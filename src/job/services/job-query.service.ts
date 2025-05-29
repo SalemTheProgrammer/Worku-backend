@@ -72,11 +72,10 @@ export class JobQueryService {
   }
 
   buildSortOptions(sortBy?: string): { [key: string]: SortOrder } {
-    switch (sortBy) {
-      case 'salary':
+    switch (sortBy) {      case 'salary':
         return {
-          'compensation.salaryMax': -1,
-          'compensation.salaryMin': -1
+          'salaryMax': -1,
+          'salaryMin': -1
         };
       case 'experience':
         return {

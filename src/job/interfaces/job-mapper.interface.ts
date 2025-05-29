@@ -50,7 +50,10 @@ export class JobMapperImpl implements JobMapper {
       },
       applications,
       requirements: job.requirements,
-      jobDetails: job.jobDetails,
+      jobDetails: {
+        ...job.jobDetails,
+        activityDomain: job.jobDetails.activityDomain ?? ''
+      },
       benefits: job.benefits,
       showSalary: job.showSalary ?? true,
       salaryMin: job.salaryMin,

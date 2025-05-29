@@ -13,6 +13,8 @@ import { ConfigService } from '@nestjs/config';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { generateInterviewConfirmationEmail } from '../email-templates/interview-confirmation.template';
+import { CompanyJournalService } from '../journal/services/company-journal.service';
+import { CompanyActionType } from '../journal/enums/action-types.enum';
 
 import { PopulatedApplication } from './interfaces/populated-application.interface';
 import { PopulatedInterview } from './interfaces/populated-interview.interface';
@@ -28,15 +30,16 @@ export class InterviewService {
     @InjectModel(Candidate.name)
     private readonly candidateModel: Model<Candidate>,
     private readonly emailService: EmailService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly companyJournalService: CompanyJournalService
   ) {}
 
   async scheduleInterview(scheduleDto: ScheduleInterviewDto): Promise<InterviewDocument> {
     const application = await this.applicationModel
       .findById(scheduleDto.applicationId)
-      .populate<{ candidat: Candidate }>('candidat')
-      .populate<{ poste: Job }>('poste')
-      .populate<{ companyId: Company }>('companyId')
+      .populate<{ candidat: Candidate & Document }>('candidat')
+      .populate<{ poste: Job & Document }>('poste')
+      .populate<{ companyId: Company & Document }>('companyId')
       .exec() as PopulatedApplication | null;
 
     if (!application) {
@@ -84,6 +87,22 @@ export class InterviewService {
       }
     );
 
+    // Log interview scheduling activity
+    await this.companyJournalService.logActivity(
+      (application.companyId as any)._id.toString(),
+      CompanyActionType.PLANIFICATION_ENTRETIEN,
+      {
+        candidateId: (application.candidat as any)._id.toString(),
+        candidateName: `${application.candidat.firstName} ${application.candidat.lastName}`,
+        jobId: (application.poste as any)._id.toString(),
+        jobTitle: application.poste.title,
+        interviewDate: formattedDate,
+        interviewTime: formattedTime,
+        interviewType: scheduleDto.type
+      },
+      `Entretien planifié avec ${application.candidat.firstName} ${application.candidat.lastName} pour le poste ${application.poste.title}`
+    );
+
     return interview;
   }
 
@@ -99,9 +118,39 @@ export class InterviewService {
       throw new BadRequestException('Interview is no longer pending confirmation');
     }
 
+    // Get application details for logging
+    const application = await this.applicationModel
+      .findById(interview.applicationId)
+      .populate<{ candidat: Candidate }>('candidat')
+      .populate<{ poste: Job }>('poste')
+      .populate<{ companyId: Company }>('companyId')
+      .exec();
+
+    if (!application) {
+      throw new NotFoundException('Application details not found');
+    }
+
     interview.status = 'confirmed';
     interview.confirmedAt = new Date();
     await interview.save();
+
+    // Log interview confirmation
+    const formattedDate = format(interview.date, 'EEEE d MMMM yyyy', { locale: fr });
+    await this.companyJournalService.logActivity(
+      (application.companyId as any)._id.toString(),
+      CompanyActionType.PLANIFICATION_ENTRETIEN,
+      {
+        candidateId: (application.candidat as any)._id.toString(),
+        candidateName: `${application.candidat.firstName} ${application.candidat.lastName}`,
+        jobId: (application.poste as any)._id.toString(),
+        jobTitle: application.poste.title,
+        interviewDate: formattedDate,
+        interviewTime: interview.time,
+        interviewStatus: 'confirmed'
+      },
+      `Entretien confirmé avec ${application.candidat.firstName} ${application.candidat.lastName} pour le poste ${application.poste.title}`
+    );
+
     return interview;
   }
 
@@ -159,7 +208,7 @@ export class InterviewService {
     return interviews.map((interview: PopulatedInterview): ScheduledCandidate => {
       if (!interview.applicationId) {
         return {
-          interviewId: interview._id.toString(),
+          interviewId: (interview as any)._id.toString(),
           candidateName: 'Unknown Candidate',
           candidateEmail: 'No email available',
           jobTitle: 'Unknown Position',
@@ -170,7 +219,7 @@ export class InterviewService {
       }
       
       return {
-        interviewId: interview._id.toString(),
+        interviewId: (interview as any)._id.toString(),
         candidateName: interview.applicationId.candidat
           ? `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`
           : 'Unknown Candidate',
@@ -213,6 +262,19 @@ export class InterviewService {
       date: undefined,
       time: undefined
     });
+
+    await this.companyJournalService.logActivity(
+      (application.companyId as any)._id.toString(),
+      CompanyActionType.PLANIFICATION_ENTRETIEN,
+      {
+        candidateId: (application.candidat as any)._id.toString(),
+        candidateName: `${application.candidat.firstName} ${application.candidat.lastName}`,
+        jobId: (application.poste as any)._id.toString(),
+        jobTitle: application.poste.title,
+        interviewStatus: 'future'
+      },
+      `${application.candidat.firstName} ${application.candidat.lastName} ajouté(e) aux entretiens futurs pour le poste ${application.poste.title}`
+    );
 
     return {
       interviewId: interview._id.toString(),
@@ -275,7 +337,7 @@ export class InterviewService {
     return allInterviews
       .filter(interview => interview.applicationId && interview.applicationId.candidat)
       .map((interview: PopulatedInterview): ScheduledCandidate => ({
-        interviewId: interview._id.toString(),
+        interviewId: interview.id,
         candidateName: `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`,
         candidateEmail: interview.applicationId.candidat.email,
         jobTitle: interview.applicationId.poste?.title || 'Unknown Position',

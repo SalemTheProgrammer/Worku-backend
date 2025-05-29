@@ -1,6 +1,9 @@
 export enum ProfessionalStatus {
-  JOB_SEEKER = 'a la recherche emploi',
-  EMPLOYED_OPEN_TO_WORK = 'employe',
-  INTERNSHIP_SEEKER = 'a la recherche d\'un stage',
-  STUDENT = 'en cours d\'etudes'
+  ACTIVELY_SEEKING = 'ACTIVELY_SEEKING',
+  PASSIVELY_LOOKING = 'PASSIVELY_LOOKING',
+  EMPLOYED = 'EMPLOYED',
+  CONTRACTOR = 'CONTRACTOR',
+  FREELANCER = 'FREELANCER',
+  CONSULTANT = 'CONSULTANT',
+  NOT_AVAILABLE = 'NOT_AVAILABLE'
 }
