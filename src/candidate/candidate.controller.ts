@@ -1,10 +1,11 @@
-import { Controller, Get, Put, Delete, Body, UseGuards, Request, HttpStatus, HttpException } from '@nestjs/common';
+import { Controller, Get, Put, Delete, Body, UseGuards, Request, HttpStatus, HttpException, Post, Param } from '@nestjs/common';
 import { Request as ExpressRequest } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CandidateService } from './candidate.service';
 import { UpdatePersonalInfoDto } from './dto/update-personal-info.dto';
 import { ProfileSuggestionsResponseDto } from './dto/profile-suggestions.dto';
+import { InterviewResponseDto } from './dto/interview-response.dto';
 
 interface RequestWithUser extends ExpressRequest {
   user: {
@@ -217,4 +218,23 @@ export class CandidateController {
       throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
     }
   }
+
+  @Get('interviews')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all scheduled interviews for the authenticated candidate' })
+  @ApiResponse({ status: 200, description: 'Interviews retrieved successfully', type: [InterviewResponseDto] })
+  async getInterviews(@Request() req: RequestWithUser): Promise<InterviewResponseDto[]> {
+    return this.candidateService.getScheduledInterviews(req.user.userId);
+  }
+
+ @Post('interviews/:interviewId/accept')
+ @UseGuards(JwtAuthGuard)
+ @ApiBearerAuth()
+ @ApiOperation({ summary: 'Accept a scheduled interview' })
+ @ApiResponse({ status: 200, description: 'Interview accepted successfully' })
+ async acceptInterview(@Request() req: RequestWithUser, @Param('interviewId') interviewId: string) {
+  await this.candidateService.acceptInterview(req.user.userId, interviewId);
+  return { message: 'Interview accepted successfully' };
+ }
 }

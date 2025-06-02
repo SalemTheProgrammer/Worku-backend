@@ -10,10 +10,14 @@ import { JobMatchModule } from './job-match/job-match.module';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
 import { GeminiModule } from '../services/gemini.module';
 import { EmailModule } from '../email/email.module';
+import { AuthModule } from '../auth/auth.module';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
+import { QueueManagementService } from './queue-management.service';
+import { QueueManagementController } from './queue-management.controller';
 
 @Module({
+  controllers: [QueueManagementController],
   imports: [
     BullModule.registerQueue({
       name: 'application-analysis',
@@ -45,14 +49,16 @@ import { Queue } from 'bull';
     ]),
     GeminiModule,
     EmailModule,
+    AuthModule,
     JobMatchModule,
   ],
   providers: [
     ApplicationAnalysisProcessor,
     JobMatchAnalysisWrapperService,
+    QueueManagementService,
     ConfigService,
   ],
-  exports: [BullModule],
+  exports: [BullModule, QueueManagementService],
 })
 export class ApplicationQueueModule implements OnModuleInit {
   private readonly logger = new Logger(ApplicationQueueModule.name);
@@ -60,6 +66,7 @@ export class ApplicationQueueModule implements OnModuleInit {
   constructor(
     private readonly processor: ApplicationAnalysisProcessor,
     private readonly configService: ConfigService,
+    private readonly queueManagement: QueueManagementService,
     @InjectQueue('application-analysis') private readonly analysisQueue: Queue
   ) {}
 
@@ -80,14 +87,23 @@ export class ApplicationQueueModule implements OnModuleInit {
       }
       this.logger.log('✅ Queue is ready');
 
-      // Clean up any stalled jobs from previous runs
-      await this.analysisQueue.clean(30000, 'wait');
-      const stalledJobs = await this.analysisQueue.getJobs(['failed', 'completed']);
-      if (stalledJobs.length > 0) {
-        this.logger.warn(`⚠️ Found ${stalledJobs.length} problematic jobs`);
-        for (const job of stalledJobs) {
-          this.logger.warn(`- Job ${job.id}: ${job.failedReason || 'unknown error'}`);
-        }
+      // Clean up problematic jobs using the queue management service
+      this.logger.log('🧹 Running queue cleanup...');
+      const cleanupResult = await this.queueManagement.cleanupProblematicJobs();
+      
+      if (cleanupResult.cleaned > 0) {
+        this.logger.log(`✅ Cleaned up ${cleanupResult.cleaned} problematic jobs`);
+      }
+      
+      if (cleanupResult.validated > 0) {
+        this.logger.log(`✅ Validated ${cleanupResult.validated} waiting jobs`);
+      }
+      
+      if (cleanupResult.errors.length > 0) {
+        this.logger.warn(`⚠️ ${cleanupResult.errors.length} cleanup errors occurred`);
+        cleanupResult.errors.slice(0, 3).forEach(error => {
+          this.logger.warn(`- ${error}`);
+        });
       }
 
       // Get current queue status

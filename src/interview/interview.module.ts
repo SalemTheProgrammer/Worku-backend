@@ -22,6 +22,6 @@ import { JournalModule } from '../journal/journal.module';
   ],
   controllers: [InterviewController],
   providers: [InterviewService],
-  exports: [InterviewService]
+  exports: [InterviewService, MongooseModule.forFeature([{ name: Interview.name, schema: InterviewSchema }])]
 })
 export class InterviewModule {}

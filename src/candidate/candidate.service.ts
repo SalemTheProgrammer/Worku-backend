@@ -12,6 +12,7 @@ import { TokenPayload } from '../interfaces/user.interface';
 import { EmailService } from '../email/email.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RegisterCandidateDto } from './dto/register-candidate.dto';
+import { InterviewService } from '../interview/interview.service';
 import { VerifyCandidateOtpDto } from './dto/verify-candidate-otp.dto';
 import { LoginCandidateDto } from './dto/login-candidate.dto';
 import { CreateExperienceDto, UpdateExperienceDto } from './dto/experience.dto';
@@ -91,6 +92,8 @@ export class CandidateService {
     private configService: ConfigService,
     private profileSuggestionService: ProfileSuggestionService,
     private emailService: EmailService,
+    private interviewService: InterviewService,
+    @InjectModel('Interview') private interviewModel: Model<any>
   ) {}
 
   // --- Profile Suggestions ---
@@ -435,4 +438,35 @@ export class CandidateService {
       throw error;
     }
   }
+
+ async getScheduledInterviews(candidateId: string): Promise<any[]> {
+   const interviews = await this.interviewService.getInterviewsByCandidate(candidateId);
+
+   return interviews.map(interview => ({
+     interviewId: interview._id.toString(),
+     date: interview.date,
+     time: interview.time,
+     type: interview.type,
+     location: interview.location,
+     meetingLink: interview.meetingLink,
+     status: interview.status,
+     jobTitle: (interview.applicationId as any)?.poste?.title || 'Unknown Job Title',
+     companyName: (interview.applicationId as any)?.companyId?.nomEntreprise || 'Unknown Company'
+   }));
+ }
+
+ async acceptInterview(candidateId: string, interviewId: string): Promise<void> {
+   const interview = await this.interviewModel.findById(interviewId).exec();
+
+   if (!interview) {
+     throw new NotFoundException('Interview not found');
+   }
+
+   if (interview.candidateId.toString() !== candidateId) {
+     throw new UnauthorizedException('You are not authorized to accept this interview');
+   }
+
+   interview.status = 'accepted';
+   await interview.save();
+ }
 }

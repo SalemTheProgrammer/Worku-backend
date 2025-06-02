@@ -21,6 +21,8 @@ import configuration from './common/config/configuration';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RateLimiterMiddleware } from './common/middleware/rate-limiter.middleware';
+import { MetricsModule } from './monitoring/metrics.module';
+import { PerformanceInterceptor } from './monitoring/interceptors/performance.interceptor';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -99,12 +101,17 @@ import { AppService } from './app.service';
     JournalModule,
     RejectionModule,
     RecommendedJobsModule,
+    MetricsModule,
   ],
   providers: [
     AppService,
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: PerformanceInterceptor,
     },
     {
       provide: APP_FILTER,

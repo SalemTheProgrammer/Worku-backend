@@ -30,6 +30,7 @@ import { GeminiModule } from '../services/gemini.module';
 import { OtpModule } from '../otp/otp.module';
 import { CvProfileExtractorModule } from './cv-profile-extractor/cv-profile-extractor.module';
 import { JournalModule } from '../journal/journal.module';
+import { InterviewModule } from 'src/interview/interview.module';
 
 @Module({
   imports: [
@@ -65,8 +66,10 @@ import { JournalModule } from '../journal/journal.module';
     GeminiModule,
     JournalModule,
     EmailModule,
-    ApplicationModule
-  ],  controllers: [
+    ApplicationModule,
+    forwardRef(() => InterviewModule),
+  ],
+  controllers: [
     CandidateController,
     CandidateFilesController,
     CandidateProfileController,
@@ -86,7 +89,8 @@ import { JournalModule } from '../journal/journal.module';
     EducationService,
     SkillService,
     CertificationService,
-    Logger
+    Logger,
+    // InterviewService
   ],
   exports: [CandidateService, CandidateFileService]
 })
