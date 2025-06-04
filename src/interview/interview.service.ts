@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, Document } from 'mongoose';
 import { Interview, InterviewDocument } from '../schemas/interview.schema';
 import { Application } from '../schemas/application.schema';
 import { Candidate } from '../schemas/candidate.schema';
@@ -9,16 +9,22 @@ import { Job } from '../schemas/job.schema';
 import { EmailService } from '../email/email.service';
 import { ScheduleInterviewDto } from './dto/schedule-interview.dto';
 import { AddToInterviewsDto } from './dto/add-to-interviews.dto';
+import { MarkInterviewCompleteDto } from './dto/interview-feedback.dto';
 import { ConfigService } from '@nestjs/config';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { generateInterviewConfirmationEmail } from '../email-templates/interview-confirmation.template';
 import { CompanyJournalService } from '../journal/services/company-journal.service';
 import { CompanyActionType } from '../journal/enums/action-types.enum';
 
 import { PopulatedApplication } from './interfaces/populated-application.interface';
 import { PopulatedInterview } from './interfaces/populated-interview.interface';
 import { ScheduledCandidate } from './interfaces/scheduled-candidate.interface';
+import {
+  InterviewsByStatusResponseDto,
+  InterviewStateDto,
+  CompanyCandidatesResponseDto,
+  CompanyCandidateApplicationDto
+} from '../job/dto/company-candidates-response.dto';
 
 @Injectable()
 export class InterviewService {
@@ -29,6 +35,10 @@ export class InterviewService {
     private readonly applicationModel: Model<Application>,
     @InjectModel(Candidate.name)
     private readonly candidateModel: Model<Candidate>,
+    @InjectModel(Company.name)
+    private readonly companyModel: Model<Company>,
+    @InjectModel(Job.name)
+    private readonly jobModel: Model<Job>,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
     private readonly companyJournalService: CompanyJournalService
@@ -62,11 +72,20 @@ export class InterviewService {
       location: scheduleDto.location,
       meetingLink: scheduleDto.meetingLink,
       notes: scheduleDto.notes,
-      status: 'pending'
+      status: 'en_attente'
     });
 
+    // Update application status
+    await this.applicationModel.findByIdAndUpdate(
+      scheduleDto.applicationId,
+      {
+        statut: 'entretien_programmer',
+        dateInterviewScheduled: new Date()
+      }
+    );
+
     const confirmationToken = this.generateConfirmationToken(interview._id.toHexString());
-    const confirmationLink = `${this.configService.get('APP_URL')}/interviews/confirm/${confirmationToken}`;
+    const confirmationLink = `${this.configService.get('frontend.url')}/interviews/confirm/${confirmationToken}`;
 
     const formattedDate = format(new Date(scheduleDto.date), 'EEEE d MMMM yyyy', { locale: fr });
     const formattedTime = scheduleDto.time;
@@ -114,7 +133,7 @@ export class InterviewService {
       throw new NotFoundException('Interview not found');
     }
 
-    if (interview.status !== 'pending') {
+    if (interview.status !== 'en_attente' && interview.status !== 'pending') {
       throw new BadRequestException('Interview is no longer pending confirmation');
     }
 
@@ -131,11 +150,20 @@ export class InterviewService {
     }
 
     interview.status = 'confirmed';
+    
+    // Update application status
+    await this.applicationModel.findByIdAndUpdate(
+      interview.applicationId,
+      {
+        statut: 'confirme',
+        dateConfirmed: new Date()
+      }
+    );
     interview.confirmedAt = new Date();
     await interview.save();
 
     // Log interview confirmation
-    const formattedDate = format(interview.date, 'EEEE d MMMM yyyy', { locale: fr });
+    const formattedDate = interview.date ? format(interview.date, 'EEEE d MMMM yyyy', { locale: fr }) : '';
     await this.companyJournalService.logActivity(
       (application.companyId as any)._id.toString(),
       CompanyActionType.PLANIFICATION_ENTRETIEN,
@@ -186,7 +214,7 @@ export class InterviewService {
   async getAllScheduledCandidates(): Promise<ScheduledCandidate[]> {
     const interviews = await this.interviewModel
       .find({
-        status: { $in: ['pending', 'confirmed'] }
+        status: { $in: ['en_attente', 'confirmed', 'pending', 'programmer'] }
       })
       .populate({
         path: 'applicationId',
@@ -312,7 +340,7 @@ export class InterviewService {
     // Find all scheduled interviews for future date
     const scheduledInterviews = await this.interviewModel
       .find({
-        status: { $in: ['pending', 'confirmed'] },
+        status: { $in: ['en_attente', 'confirmed', 'pending', 'programmer'] },
         date: { $gt: new Date() }
       })
       .populate<{ applicationId: PopulatedApplication }>({
@@ -337,7 +365,7 @@ export class InterviewService {
     return allInterviews
       .filter(interview => interview.applicationId && interview.applicationId.candidat)
       .map((interview: PopulatedInterview): ScheduledCandidate => ({
-        interviewId: interview.id,
+        interviewId: (interview as any)._id.toString(),
         candidateName: `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`,
         candidateEmail: interview.applicationId.candidat.email,
         jobTitle: interview.applicationId.poste?.title || 'Unknown Position',
@@ -345,5 +373,202 @@ export class InterviewService {
         scheduledDate: interview.date,
         scheduledTime: interview.time
       }));
+  }
+
+  async getInterviewsByStatus(status?: string, companyId?: string): Promise<InterviewsByStatusResponseDto> {
+    const query: any = {};
+    
+    if (status) {
+      query.status = status;
+    }
+
+    const interviews = await this.interviewModel
+      .find(query)
+      .populate({
+        path: 'applicationId',
+        populate: [
+          {
+            path: 'candidat',
+            select: 'firstName lastName email phone'
+          },
+          {
+            path: 'poste',
+            select: 'title'
+          },
+          {
+            path: 'companyId',
+            select: 'nomEntreprise'
+          }
+        ]
+      })
+      .sort({ date: 1, time: 1 })
+      .lean<PopulatedInterview[]>()
+      .exec();
+
+    const filteredInterviews = companyId
+      ? interviews.filter(interview =>
+          interview.applicationId &&
+          (interview.applicationId as any).companyId?._id?.toString() === companyId
+        )
+      : interviews;
+
+    const mappedInterviews: InterviewStateDto[] = filteredInterviews
+      .filter(interview => interview.applicationId && interview.applicationId.candidat)
+      .map((interview: PopulatedInterview): InterviewStateDto => ({
+        interviewId: (interview as any)._id.toString(),
+        candidate: {
+          id: interview.applicationId.candidat._id?.toString() || '',
+          fullName: `${interview.applicationId.candidat.firstName} ${interview.applicationId.candidat.lastName}`,
+          email: interview.applicationId.candidat.email || '',
+          phone: interview.applicationId.candidat.phone || ''
+        },
+        job: {
+          id: interview.applicationId.poste?._id?.toString() || '',
+          title: interview.applicationId.poste?.title || 'Unknown Position'
+        },
+        status: interview.status,
+        scheduledDate: interview.date,
+        scheduledTime: interview.time,
+        type: interview.type,
+        location: interview.location || interview.meetingLink,
+        confirmedAt: interview.confirmedAt,
+        completedAt: (interview as any).completedAt,
+        cancelledAt: (interview as any).cancelledAt,
+        cancellationReason: (interview as any).cancellationReason,
+        isHired: (interview as any).isHired
+      }));
+
+    return {
+      interviews: mappedInterviews,
+      total: mappedInterviews.length
+    };
+  }
+
+  async confirmInterviewById(interviewId: string): Promise<InterviewDocument> {
+    const interview = await this.interviewModel.findById(interviewId);
+    if (!interview) {
+      throw new NotFoundException('Interview not found');
+    }
+
+    if (interview.status !== 'programmer' && interview.status !== 'pending' && interview.status !== 'en_attente') {
+      throw new BadRequestException('Interview is not in a state that can be confirmed');
+    }
+
+    interview.status = 'confirmed';
+    interview.confirmedAt = new Date();
+    await interview.save();
+
+    // Update application status
+    await this.applicationModel.findByIdAndUpdate(
+      interview.applicationId,
+      {
+        statut: 'confirme',
+        dateConfirmed: new Date()
+      }
+    );
+
+    return interview;
+  }
+
+  async completeInterview(interviewId: string, completeDto: MarkInterviewCompleteDto): Promise<InterviewDocument> {
+    const interview = await this.interviewModel.findById(interviewId);
+    if (!interview) {
+      throw new NotFoundException('Interview not found');
+    }
+
+    interview.status = 'completed';
+    interview.completedAt = new Date();
+    interview.feedback = completeDto.feedback;
+    
+    if (completeDto.isHired !== undefined) {
+      interview.isHired = completeDto.isHired;
+      interview.hiringDecisionDate = new Date();
+      interview.hiringDecisionReason = completeDto.hiringDecisionReason;
+    }
+
+    await interview.save();
+
+    // Update application status based on hiring decision
+    const newStatus = completeDto.isHired ? 'présélectionné' : 'rejeté';
+    await this.applicationModel.findByIdAndUpdate(
+      interview.applicationId,
+      { statut: newStatus }
+    );
+
+    return interview;
+  }
+
+  async cancelInterview(interviewId: string, cancellationReason: string): Promise<InterviewDocument> {
+    const interview = await this.interviewModel.findById(interviewId);
+    if (!interview) {
+      throw new NotFoundException('Interview not found');
+    }
+
+    interview.status = 'annule';
+    interview.cancelledAt = new Date();
+    interview.cancellationReason = cancellationReason;
+    await interview.save();
+
+    // Update application status
+    await this.applicationModel.findByIdAndUpdate(
+      interview.applicationId,
+      {
+        statut: 'annule',
+        dateCancelled: new Date(),
+        cancellationReason: cancellationReason
+      }
+    );
+
+    return interview;
+  }
+
+  async getCompanyCandidatesForInterview(companyId: string, options: { limit: number; skip: number }): Promise<CompanyCandidatesResponseDto> {
+    const applications = await this.applicationModel
+      .find({ companyId: new Types.ObjectId(companyId) })
+      .populate({
+        path: 'candidat',
+        select: 'firstName lastName email phone'
+      })
+      .populate({
+        path: 'poste',
+        select: 'title'
+      })
+      .sort({ datePostulation: -1 })
+      .limit(options.limit)
+      .skip(options.skip)
+      .lean()
+      .exec();
+
+    const total = await this.applicationModel.countDocuments({ companyId: new Types.ObjectId(companyId) });
+
+    const mappedApplications: CompanyCandidateApplicationDto[] = applications
+      .filter(app => app.candidat && app.poste)
+      .map((app: any): CompanyCandidateApplicationDto => ({
+        applicationId: app._id.toString(),
+        candidate: {
+          id: app.candidat._id.toString(),
+          fullName: `${app.candidat.firstName} ${app.candidat.lastName}`,
+          email: app.candidat.email || '',
+          phone: app.candidat.phone || ''
+        },
+        job: {
+          id: app.poste._id.toString(),
+          title: app.poste.title
+        },
+        status: app.statut,
+        appliedAt: app.datePostulation,
+        isRecommended: app.analyse?.synthèseAdéquation?.recommandé || false,
+        overallScore: app.analyse?.scoreDAdéquation?.global || 0,
+        dateSeen: app.dateSeen,
+        dateInterviewScheduled: app.dateInterviewScheduled,
+        dateConfirmed: app.dateConfirmed,
+        dateCancelled: app.dateCancelled,
+        cancellationReason: app.cancellationReason
+      }));
+
+    return {
+      applications: mappedApplications,
+      total
+    };
   }
 }

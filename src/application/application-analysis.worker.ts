@@ -158,10 +158,15 @@ export class ApplicationAnalysisWorker {
       this.logger.debug('Application details:', application);
 
       this.logger.log('🧠 Starting job-candidate match analysis...');
-      const analysis = await this.jobMatchAnalysisService.analyzeMatch(
-        application.candidat._id.toString(),
-        application.poste._id.toString()
-      );
+      // Safely extract IDs from populated or non-populated fields
+      const candidateId = (application.candidat && typeof application.candidat === 'object' && '_id' in application.candidat)
+        ? application.candidat._id.toString()
+        : (application.candidat as Types.ObjectId).toString();
+      const jobId = (application.poste && typeof application.poste === 'object' && '_id' in application.poste)
+        ? application.poste._id.toString()
+        : (application.poste as Types.ObjectId).toString();
+        
+      const analysis = await this.jobMatchAnalysisService.analyzeMatch(candidateId, jobId);
       this.logger.log('✅ Analysis completed');
       this.logger.debug('Analysis results:', analysis);
 

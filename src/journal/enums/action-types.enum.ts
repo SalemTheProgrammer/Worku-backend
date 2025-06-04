@@ -31,6 +31,7 @@ export enum CandidateActionType {
   NOTIFICATION_ACCEPTATION = 'notification_acceptation',
   NOTIFICATION_REJET = 'notification_rejet',
   TELECHARGEMENT_CV = 'téléchargement_cv',
+  ENTRETIEN_CONFIRME = 'entretien_confirmé',
   CONNEXION = 'connexion',
   DECONNEXION = 'déconnexion',
 }

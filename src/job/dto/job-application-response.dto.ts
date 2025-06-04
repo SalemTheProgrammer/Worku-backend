@@ -137,6 +137,21 @@ export class JobApplicationResponseDto {
 
   @ApiProperty({ description: 'Job title' })
   jobTitle: string;
+
+  @ApiProperty({ description: 'Date when application was seen by company', required: false })
+  dateSeen?: Date;
+
+  @ApiProperty({ description: 'Date when interview was scheduled', required: false })
+  dateInterviewScheduled?: Date;
+
+  @ApiProperty({ description: 'Date when candidate confirmed interview', required: false })
+  dateConfirmed?: Date;
+
+  @ApiProperty({ description: 'Date when interview was cancelled', required: false })
+  dateCancelled?: Date;
+
+  @ApiProperty({ description: 'Reason for cancellation', required: false })
+  cancellationReason?: string;
 }
 
 export class JobApplicationsListResponseDto {

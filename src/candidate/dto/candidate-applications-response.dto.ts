@@ -29,11 +29,30 @@ export class CandidateApplicationDto {
   @ApiProperty({ description: 'When the candidate applied for the job', example: '2025-05-01T12:00:00.000Z' })
   appliedAt: Date;
 
-  @ApiProperty({ description: 'Application status', example: 'en_attente', enum: ['en_attente', 'analysé', 'présélectionné', 'rejeté'] })
+  @ApiProperty({
+    description: 'Application status',
+    example: 'en_attente',
+    enum: ['en_attente', 'analysé', 'présélectionné', 'rejeté', 'vu', 'entretien_programmer', 'en_attente_confirmation', 'confirme', 'annule']
+  })
   status: string;
 
   @ApiProperty({ description: 'Whether the application was rejected', example: false })
   isRejected: boolean;
+
+  @ApiProperty({ description: 'Date when application was seen by company', example: '2025-05-01T12:00:00.000Z', required: false })
+  dateSeen?: Date;
+
+  @ApiProperty({ description: 'Date when interview was scheduled', example: '2025-05-01T12:00:00.000Z', required: false })
+  dateInterviewScheduled?: Date;
+
+  @ApiProperty({ description: 'Date when candidate confirmed interview', example: '2025-05-01T12:00:00.000Z', required: false })
+  dateConfirmed?: Date;
+
+  @ApiProperty({ description: 'Date when interview was cancelled', example: '2025-05-01T12:00:00.000Z', required: false })
+  dateCancelled?: Date;
+
+  @ApiProperty({ description: 'Reason for cancellation', example: 'Candidate not available', required: false })
+  cancellationReason?: string;
 }
 
 export class CandidateApplicationsResponseDto {

@@ -103,7 +103,7 @@ export class ApplicationService implements IApplicationService {
       this.logger.debug(`Creating application: candidate=${candidateId}, job=${jobId}`);
 
       const exists = await this.applicationModel
-        .findOne({ candidat: candidateId, poste: jobId })
+        .findOne({ candidat: new Types.ObjectId(candidateId), poste: new Types.ObjectId(jobId) })
         .session(session);
       if (exists) {
         throw new HttpException(
@@ -331,7 +331,12 @@ export class ApplicationService implements IApplicationService {
 
       this.logger.debug(`Found ${allCandidateApps.length} total applications for candidate`);
       
-      const jobIds = allCandidateApps.map(app => app.poste.toString());
+      const jobIds = allCandidateApps.map(app => {
+        if (app.poste && typeof app.poste === 'object' && '_id' in app.poste) {
+          return app.poste._id.toString();
+        }
+        return (app.poste as any).toString();
+      });
       this.logger.debug('All job IDs for candidate:', jobIds);
 
       const application = await this.applicationModel

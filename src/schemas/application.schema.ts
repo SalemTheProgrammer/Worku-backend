@@ -27,15 +27,30 @@ export class Application {
   @Prop({ type: Date, required: false })
   dateAnalyse?: Date;
 
-  @Prop({ 
-    type: String, 
-    enum: ['en_attente', 'analysé', 'présélectionné', 'rejeté'],
+  @Prop({
+    type: String,
+    enum: ['en_attente', 'analysé', 'présélectionné', 'rejeté', 'vu', 'entretien_programmer', 'en_attente_confirmation', 'confirme', 'annule'],
     default: 'en_attente'
   })
   statut: string;
 
   @Prop({ type: Boolean, default: false })
   isRejected: boolean;
+
+  @Prop({ type: Date })
+  dateSeen?: Date;
+
+  @Prop({ type: Date })
+  dateInterviewScheduled?: Date;
+
+  @Prop({ type: Date })
+  dateConfirmed?: Date;
+
+  @Prop({ type: Date })
+  dateCancelled?: Date;
+
+  @Prop({ type: String })
+  cancellationReason?: string;
 
   @Prop({
     type: {

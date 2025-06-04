@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { CandidateJournal } from '../../schemas/candidate-journal.schema';
@@ -79,6 +79,39 @@ export class CandidateJournalService {
       total,
       page,
       limit,
+    };
+  }
+
+  async getActivityById(
+    candidateId: string,
+    activityId: string
+  ): Promise<CandidateJournalActivityDto> {
+    if (!Types.ObjectId.isValid(activityId)) {
+      throw new NotFoundException('ID d\'activité invalide');
+    }
+
+    const activity = await this.candidateJournalModel
+      .findById(activityId)
+      .lean()
+      .exec();
+    
+    if (!activity) {
+      throw new NotFoundException('Activité non trouvée');
+    }
+    
+    // Verify that the activity belongs to the requesting candidate
+    if (activity.candidateId.toString() !== candidateId) {
+      throw new ForbiddenException('Accès interdit à cette activité');
+    }
+    
+    return {
+      id: activity._id.toString(),
+      actionType: activity.actionType,
+      timestamp: activity.timestamp,
+      message: activity.message,
+      details: activity.details,
+      isSystem: activity.isSystem,
+      candidateId: activity.candidateId.toString(),
     };
   }
 }

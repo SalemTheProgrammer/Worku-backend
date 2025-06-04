@@ -19,6 +19,8 @@ import { EducationService } from './services/education.service';
 import { CertificationController } from './controllers/certification.controller';
 import { CertificationService } from './services/certification.service';
 import { CvSkillsService } from './services/cv-skills.service';
+import { CandidateInterviewController } from './controllers/candidate-interview.controller';
+import { CandidateInterviewService } from './services/candidate-interview.service';
 import { CvAnalysisQueue } from './cv-analysis.queue';
 import { CvAnalysisProcessor } from './cv-analysis.processor';
 import { CvProfileExtractionProcessor } from './cv-profile-extraction.processor';
@@ -78,6 +80,7 @@ import { InterviewModule } from 'src/interview/interview.module';
     SkillController,
     CertificationController,
     CandidateApplicationsController,
+    CandidateInterviewController,
   ],
   providers: [
     CandidateService,
@@ -89,6 +92,7 @@ import { InterviewModule } from 'src/interview/interview.module';
     EducationService,
     SkillService,
     CertificationService,
+    CandidateInterviewService,
     Logger,
     // InterviewService
   ],

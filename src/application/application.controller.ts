@@ -174,7 +174,10 @@ export class ApplicationController {
   ): Promise<ApiResponseData<JobApplicationResponseDto>> {
     try {
       const app = await this.applicationService.getApplicationById(id);
-      if (app.candidat.toString() !== req.user.userId && req.user.role !== 'company') {
+      const candidateId = (app.candidat && typeof app.candidat === 'object' && '_id' in app.candidat)
+        ? app.candidat._id.toString()
+        : (app.candidat as any).toString();
+      if (candidateId !== req.user.userId && req.user.role !== 'company') {
         throw new HttpException('Unauthorized access', HttpStatus.FORBIDDEN);
       }
       
@@ -269,7 +272,10 @@ export class ApplicationController {
     @Param('id') id: string,
   ) {
     const app = await this.applicationService.getApplicationById(id);
-    if (app.candidat.toString() !== req.user.userId) {
+    const candidateId = (app.candidat && typeof app.candidat === 'object' && '_id' in app.candidat)
+      ? app.candidat._id.toString()
+      : (app.candidat as any).toString();
+    if (candidateId !== req.user.userId) {
       throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
     }
     await this.applicationService.deleteApplication(id);

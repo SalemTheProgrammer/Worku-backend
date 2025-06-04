@@ -86,7 +86,7 @@ export class EmailService {
     }
 
     try {
-      const frontendUrl = this.configService.get<string>('FRONTNED_URL');
+      const frontendUrl = this.configService.get<string>('frontend.url');
       if (!frontendUrl) {
         throw new Error('Frontend URL not configured');
       }

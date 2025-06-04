@@ -28,7 +28,7 @@ export class Interview {
   @Prop()
   meetingLink?: string;
 
-  @Prop({ enum: ['pending', 'confirmed', 'declined', 'completed', 'cancelled', 'future'], default: 'future' })
+  @Prop({ enum: ['pending', 'confirmed', 'declined', 'completed', 'cancelled', 'future', 'programmer', 'en_attente', 'annule'], default: 'future' })
   status: string;
 
   @Prop()
@@ -36,6 +36,49 @@ export class Interview {
 
   @Prop({ type: Date })
   confirmedAt?: Date;
+
+  @Prop({ type: Date })
+  completedAt?: Date;
+
+  @Prop({ type: Date })
+  cancelledAt?: Date;
+
+  @Prop()
+  cancellationReason?: string;
+
+  @Prop({
+    type: {
+      overallRating: Number,
+      technicalSkills: Number,
+      communication: Number,
+      motivation: Number,
+      culturalFit: Number,
+      comments: String,
+      strengths: [String],
+      weaknesses: [String],
+      recommendation: String
+    }
+  })
+  feedback?: {
+    overallRating: number;
+    technicalSkills: number;
+    communication: number;
+    motivation: number;
+    culturalFit: number;
+    comments: string;
+    strengths: string[];
+    weaknesses: string[];
+    recommendation: string;
+  };
+
+  @Prop({ type: Boolean, default: false })
+  isHired: boolean;
+
+  @Prop({ type: Date })
+  hiringDecisionDate?: Date;
+
+  @Prop()
+  hiringDecisionReason?: string;
 }
 
 export const InterviewSchema = SchemaFactory.createForClass(Interview);

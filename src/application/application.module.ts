@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ApplicationService } from './application.service';
 import { ApplicationController } from './application.controller';
+import { ApplicationStatusController } from './application-status.controller';
+import { ApplicationStatusService } from './application-status.service';
 import { Application, ApplicationSchema } from '../schemas/application.schema';
 import { Job, JobSchema } from '../schemas/job.schema';
 import { Candidate, CandidateSchema } from '../schemas/candidate.schema';
@@ -25,8 +27,8 @@ import { JobMatchModule } from './job-match/job-match.module';
     GeminiModule,
     JobMatchModule
   ],
-  controllers: [ApplicationController],
-  providers: [ApplicationService, JobMatchAnalysisWrapperService],
-  exports: [ApplicationService, JobMatchAnalysisWrapperService]
+  controllers: [ApplicationController, ApplicationStatusController],
+  providers: [ApplicationService, ApplicationStatusService, JobMatchAnalysisWrapperService],
+  exports: [ApplicationService, ApplicationStatusService, JobMatchAnalysisWrapperService]
 })
 export class ApplicationModule {}

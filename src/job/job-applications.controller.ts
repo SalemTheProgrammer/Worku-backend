@@ -330,7 +330,12 @@ export class JobApplicationsController {
         },
         // Add the new fields
         skills: app.candidat?.skills?.map(skill => skill.name) || [],
-        jobTitle: app.poste?.title || ''
+        jobTitle: app.poste?.title || '',
+        dateSeen: app.dateSeen,
+        dateInterviewScheduled: app.dateInterviewScheduled,
+        dateConfirmed: app.dateConfirmed,
+        dateCancelled: app.dateCancelled,
+        cancellationReason: app.cancellationReason
       };
     } catch (error) {
       this.logger.error(`Error mapping application: ${error.message}`);

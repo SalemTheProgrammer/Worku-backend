@@ -82,4 +82,51 @@ export class CandidateJournalController {
     
     return this.candidateJournalService.getActivities(candidateId, options);
   }
+
+  /**
+   * Get specific activity details by ID
+   */
+  @Get(':activityId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Récupérer les détails d'une activité spécifique",
+    description: "Retourne les détails complets d'une activité spécifique du candidat authentifié"
+  })
+  @ApiParam({
+    name: 'activityId',
+    description: "ID de l'activité à récupérer",
+    example: '67891b4667d0d8992e610c88'
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Détails de l\'activité',
+    type: PaginatedJournalResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Activité non trouvée'
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Non autorisé'
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Accès interdit - activité appartient à un autre candidat'
+  })
+  async getActivityById(
+    @Request() req,
+    @Param('activityId') activityId: string,
+  ): Promise<CandidateJournalActivityDto> {
+    const candidateId = req.user.candidateId || req.user.userId;
+    
+    if (!candidateId) {
+      throw new UnauthorizedException('Accès candidat requis');
+    }
+    
+    this.logger.log(`Retrieving activity ${activityId} for candidate ${candidateId}`);
+    
+    return this.candidateJournalService.getActivityById(candidateId, activityId);
+  }
 }

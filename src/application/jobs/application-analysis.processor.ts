@@ -2,7 +2,7 @@ import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Application } from '../../schemas/application.schema';
 import { JobMatchAnalysisWrapperService } from '../job-match-analysis-wrapper.service';
 
@@ -47,10 +47,15 @@ export class ApplicationAnalysisProcessor {
 
       this.logger.log(`Processing application for candidate ${application.candidat} and job ${application.poste}`);
 
-      const analysisResult = await this.jobMatchAnalysisService.analyzeMatch(
-        application.candidat.toString(),
-        application.poste.toString()
-      );
+      // Safely extract IDs from populated or non-populated fields
+      const candidateId = (application.candidat && typeof application.candidat === 'object' && '_id' in application.candidat)
+        ? application.candidat._id.toString()
+        : (application.candidat as Types.ObjectId).toString();
+      const jobId = (application.poste && typeof application.poste === 'object' && '_id' in application.poste)
+        ? application.poste._id.toString()
+        : (application.poste as Types.ObjectId).toString();
+
+      const analysisResult = await this.jobMatchAnalysisService.analyzeMatch(candidateId, jobId);
 
       this.logger.debug('Analysis completed successfully');
 

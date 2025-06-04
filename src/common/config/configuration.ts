@@ -63,6 +63,10 @@ export default () => {
       geminiKey: process.env.GEMINI_API_KEY
     },
 
+    frontend: {
+      url: process.env.FRONTEND_URL || 'http://localhost:4200'
+    },
+
     email: {
       host: process.env.EMAIL_HOST,
       port: parseIntSafe(process.env.EMAIL_PORT, 587),

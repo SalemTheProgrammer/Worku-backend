@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Job } from '../../../schemas/job.schema';
 import { Candidate } from '../../../schemas/candidate.schema';
 import { Application } from '../../../schemas/application.schema';
@@ -237,7 +237,7 @@ export class JobMatchAnalysisService {
    */
   private async saveResultToDatabase(candidateId: string, jobId: string, analysisData: any, salaryRange: any): Promise<void> {
     const result = await this.applicationModel.findOneAndUpdate(
-      { candidat: candidateId, poste: jobId },
+      { candidat: new Types.ObjectId(candidateId), poste: new Types.ObjectId(jobId) },
       {
         $set: {
           ...analysisData,
@@ -262,7 +262,7 @@ export class JobMatchAnalysisService {
    */
   private async saveRecoveredResultToDatabase(candidateId: string, jobId: string, recoveredResponse: any, salaryRange: any): Promise<JobMatchResponse> {
     const result = await this.applicationModel.findOneAndUpdate(
-      { candidat: candidateId, poste: jobId },
+      { candidat: new Types.ObjectId(candidateId), poste: new Types.ObjectId(jobId) },
       {
         $set: {
           statut: 'analysé',
@@ -294,7 +294,7 @@ export class JobMatchAnalysisService {
    */
   private async saveFallbackResultToDatabase(candidateId: string, jobId: string, fallbackResponse: JobMatchResponse): Promise<JobMatchResponse> {
     const result = await this.applicationModel.findOneAndUpdate(
-      { candidat: candidateId, poste: jobId },
+      { candidat: new Types.ObjectId(candidateId), poste: new Types.ObjectId(jobId) },
       {
         $set: {
           statut: 'analysé',
