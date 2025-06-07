@@ -1,179 +1,310 @@
-# Worku - Hiring Platform API
+# 🚀 Worku - Hiring Platform API
 
-A high-end authentication and authorization system for a hiring platform built with Spring Boot, Spring Security, JWT, and MySQL.
+A comprehensive job matching and recruitment platform built with NestJS, featuring AI-powered CV analysis, intelligent job recommendations, and a complete hiring workflow.
 
-## Features
+## 🌟 Features
 
-- Secure authentication with JWT tokens
-- Role-based authorization (Company and Candidate)
-- Company and Candidate registration and management
-- Password encryption with BCrypt
-- Email validation
-- Phone number validation
-- Input validation and error handling
-- API documentation with OpenAPI/Swagger
-- Unit and integration tests
-- MySQL database integration
-- Token refresh mechanism
-- Audit logging for entities
+### Core Functionality
+- **🔐 Secure Authentication** - JWT-based auth with refresh tokens
+- **👥 Dual User Types** - Companies and Candidates with role-based access
+- **💼 Job Management** - Complete job posting, application, and tracking system
+- **🤖 AI-Powered CV Analysis** - Automated CV parsing and candidate matching
+- **📧 Email Integration** - Automated notifications and communication
+- **📊 Analytics Dashboard** - Company insights and recruitment metrics
+- **🔍 Smart Job Recommendations** - AI-driven job matching for candidates
+- **📱 File Management** - CV uploads, profile images, and company logos
+- **🕒 Interview Scheduling** - Complete interview management system
 
-## Technology Stack
+### Technical Features
+- **🛡️ Production Security** - Helmet, rate limiting, CORS, validation
+- **📈 Monitoring** - Health checks, metrics, and performance tracking
+- **🗄️ Database** - MongoDB with optimized schemas and indexing
+- **⚡ Caching** - Redis-based caching for improved performance
+- **📋 Queue Management** - Bull queue for background job processing
+- **📖 API Documentation** - Comprehensive Swagger/OpenAPI documentation
+- **🐳 Docker Support** - Complete containerization with multi-stage builds
+- **🧪 Testing** - Unit and integration tests with Jest
 
-- Java 17
-- Spring Boot 3.x
-- Spring Security
-- Spring Data JPA
-- MySQL 8
-- JWT (JSON Web Tokens)
-- Swagger/OpenAPI
-- Maven
-- JUnit 5
-- H2 Database (for testing)
-- Lombok
+## 🛠️ Technology Stack
 
-## Prerequisites
+- **Backend**: NestJS (Node.js), TypeScript
+- **Database**: MongoDB with Mongoose ODM
+- **Cache/Queue**: Redis with Bull Queue
+- **Authentication**: JWT with Passport
+- **AI Integration**: Google Gemini API
+- **Email**: Nodemailer with templating
+- **File Processing**: Multer, PDF parsing
+- **Documentation**: Swagger/OpenAPI
+- **Containerization**: Docker & Docker Compose
+- **Monitoring**: Prometheus metrics, Winston logging
 
-- Java 17 or higher
-- MySQL 8
-- Maven
+## 🚀 Quick Start
 
-## Getting Started
+### Prerequisites
+- Node.js 18+ 
+- MongoDB 5+
+- Redis 6+
+- Docker & Docker Compose (recommended)
 
-1. Clone the repository:
+### Option 1: Docker Deployment (Recommended)
+
+1. **Clone and setup**:
 ```bash
-git clone https://github.com/yourusername/worku.git
-cd worku
+git clone <your-repo-url>
+cd worku-backend
 ```
 
-2. Configure MySQL database in `src/main/resources/application.properties`:
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/worku?createDatabaseIfNotExist=true
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-```
-
-3. Build the project:
+2. **Configure environment**:
 ```bash
-mvn clean install
+cp .env.production.example .env.production
+# Edit .env.production with your actual values
 ```
 
-4. Run the application:
+3. **Deploy with Docker**:
 ```bash
-mvn spring-boot:run
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
-The application will start on http://localhost:8080
+4. **Verify deployment**:
+```bash
+curl http://localhost:8080/health
+```
 
-## API Documentation
+### Option 2: Local Development
 
-After starting the application, you can access the API documentation at:
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- OpenAPI JSON: http://localhost:8080/v3/api-docs
+1. **Install dependencies**:
+```bash
+npm install
+```
 
-## API Endpoints
+2. **Setup environment**:
+```bash
+cp .env.production.example .env
+# Configure your local environment variables
+```
+
+3. **Start services** (MongoDB, Redis):
+```bash
+docker-compose up -d redis
+# Start your MongoDB instance
+```
+
+4. **Run the application**:
+```bash
+npm run start:prod
+```
+
+## 📖 API Documentation
+
+Once deployed, access the interactive API documentation:
+
+- **Swagger UI**: `http://your-domain/api`
+- **OpenAPI JSON**: `http://your-domain/api-json`
+- **Health Check**: `http://your-domain/health`
+
+## 🔑 Key API Endpoints
 
 ### Authentication
-
 ```
-POST /api/v1/auth/register/company    - Register a new company
-POST /api/v1/auth/register/candidate  - Register a new candidate
-POST /api/v1/auth/login              - Authenticate user
-```
-
-### Request Examples
-
-#### Register Company
-```json
-{
-  "companyName": "Tech Corp",
-  "firstName": "John",
-  "lastName": "Doe",
-  "email": "john@techcorp.com",
-  "password": "SecurePass123!",
-  "phoneNumber": "+1234567890",
-  "industry": "Technology",
-  "website": "https://techcorp.com",
-  "description": "Leading tech company",
-  "size": "50-200",
-  "location": "New York"
-}
+POST /api/v1/auth/register/company    - Register company
+POST /api/v1/auth/register/candidate  - Register candidate  
+POST /api/v1/auth/login              - User login
+POST /api/v1/auth/refresh            - Refresh JWT token
 ```
 
-#### Register Candidate
-```json
-{
-  "firstName": "Jane",
-  "lastName": "Smith",
-  "email": "jane@email.com",
-  "password": "SecurePass123!",
-  "phoneNumber": "+1234567890",
-  "bio": "Experienced software engineer",
-  "skills": "Java, Spring Boot, React",
-  "currentPosition": "Senior Developer",
-  "education": "BSc Computer Science",
-  "experience": "5 years",
-  "linkedinUrl": "https://linkedin.com/in/janesmith"
-}
+### Job Management
+```
+GET    /api/v1/jobs                  - List jobs (with filters)
+POST   /api/v1/jobs                  - Create job posting
+GET    /api/v1/jobs/:id              - Get job details
+PUT    /api/v1/jobs/:id              - Update job
+DELETE /api/v1/jobs/:id              - Delete job
 ```
 
-#### Login
-```json
-{
-  "email": "user@example.com",
-  "password": "SecurePass123!"
-}
+### Applications
+```
+POST /api/v1/jobs/:id/apply          - Apply to job
+GET  /api/v1/applications            - Get user applications
+PUT  /api/v1/applications/:id/status - Update application status
 ```
 
-## Security
-
-- Password Requirements:
-  - Minimum 8 characters
-  - At least one uppercase letter
-  - At least one lowercase letter
-  - At least one number
-  - At least one special character
-
-- JWT Token Configuration:
-  - Access Token validity: 24 hours
-  - Refresh Token validity: 7 days
-
-## Error Handling
-
-The API uses standard HTTP status codes and returns detailed error messages:
-
-```json
-{
-  "timestamp": "2024-02-21T18:26:51",
-  "status": 400,
-  "message": "Validation failed",
-  "errors": {
-    "email": "Invalid email format",
-    "password": "Password must contain at least 8 characters"
-  }
-}
+### AI Features
+```
+POST /api/v1/candidates/analyze-cv   - AI CV analysis
+GET  /api/v1/recommended-jobs        - Get job recommendations
+POST /api/v1/jobs/:id/analyze-candidates - Analyze job applicants
 ```
 
-## Testing
+## 🔧 Configuration
 
-Run tests with:
+### Required Environment Variables
 ```bash
-mvn test
+# Database
+MONGODB_URI=mongodb://localhost:27017/worku
+REDIS_URL=redis://localhost:6379
+
+# Security
+JWT_SECRET=your-jwt-secret-32-chars-minimum
+JWT_REFRESH_SECRET=your-refresh-secret
+
+# External APIs
+GEMINI_API_KEY=your-gemini-api-key
+
+# Email
+EMAIL_HOST=smtp.gmail.com
+EMAIL_USER=your-email@domain.com
+EMAIL_PASSWORD=your-app-password
+EMAIL_FROM=noreply@yourdomain.com
+
+# Application
+FRONTEND_URL=https://yourdomain.com
+CORS_ALLOWED_ORIGINS=https://yourdomain.com
 ```
 
-The project includes:
-- Unit tests
-- Integration tests
-- Authentication tests
-- Validation tests
+### Optional Configuration
+- `RATE_LIMIT_MAX_REQUESTS=100` - API rate limiting
+- `MAX_FILE_SIZE=5242880` - File upload size limit (5MB)
+- `ENABLE_SWAGGER=false` - Enable/disable API docs in production
+- `LOG_LEVEL=info` - Logging level
 
-## Contributing
+## 🐳 Production Deployment
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+### Docker Deployment Steps
 
-## License
+1. **Prepare environment**:
+```bash
+# Create production environment file
+cp .env.production.example .env.production
+# Configure all required variables
+```
 
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
+2. **Build and deploy**:
+```bash
+# Build production image
+docker-compose -f docker-compose.prod.yml build
+
+# Start services
+docker-compose -f docker-compose.prod.yml up -d
+
+# View logs
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+3. **Health verification**:
+```bash
+# Check application health
+curl http://localhost:8080/health
+
+# Check container status
+docker-compose -f docker-compose.prod.yml ps
+```
+
+### Cloud Deployment
+
+For cloud deployment (AWS, GCP, Azure), you'll need:
+
+1. **External MongoDB** (MongoDB Atlas recommended)
+2. **External Redis** (ElastiCache, Cloud Memorystore, etc.)
+3. **File Storage** (S3, Google Cloud Storage, Azure Blob)
+4. **Domain & SSL** certificate
+5. **Environment variables** configured in your cloud platform
+
+## 📊 Monitoring & Health
+
+- **Health endpoint**: `/health` - Application and service status
+- **Metrics endpoint**: `/metrics` - Prometheus metrics
+- **Logs**: Winston-based structured logging
+- **Graceful shutdown**: Proper cleanup on termination
+
+## 🔒 Security Features
+
+- **JWT Authentication** with refresh tokens
+- **Rate limiting** (100 requests/15 minutes by default)
+- **Helmet security headers**
+- **CORS protection**
+- **Input validation** with class-validator
+- **Password hashing** with bcrypt
+- **File upload validation**
+- **SQL injection protection** (NoSQL)
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run tests with coverage
+npm run test:cov
+
+# Run E2E tests
+npm run test:e2e
+```
+
+## 📝 Development
+
+```bash
+# Start in development mode
+npm run start:dev
+
+# Build for production
+npm run build:prod
+
+# Lint code
+npm run lint
+
+# Format code
+npm run format
+```
+
+## 🤝 API Integration Examples
+
+### Company Registration
+```javascript
+const response = await fetch('/api/v1/auth/register/company', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    companyName: "Tech Corp",
+    firstName: "John",
+    lastName: "Doe",
+    email: "john@techcorp.com",
+    password: "SecurePass123!",
+    phoneNumber: "+1234567890",
+    industry: "Technology"
+  })
+});
+```
+
+### Job Creation
+```javascript
+const response = await fetch('/api/v1/jobs', {
+  method: 'POST',
+  headers: { 
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    title: "Senior Developer",
+    description: "Join our amazing team...",
+    skills: ["JavaScript", "Node.js", "React"],
+    salary: { min: 80000, max: 120000, currency: "USD" },
+    location: "Remote",
+    contractType: "FULL_TIME"
+  })
+});
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+For support and questions:
+- Create an issue on GitHub
+- Check the API documentation at `/api`
+- Review the health status at `/health`
+
+---
+
+**Ready for production deployment!** 🚀

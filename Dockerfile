@@ -34,6 +34,9 @@ RUN npm ci --only=production
 # Copy built app from builder
 COPY --from=builder /usr/src/app/dist ./dist
 
+# Copy email templates
+COPY --from=builder /usr/src/app/src/email-templates ./dist/email-templates
+
 # Optional: Copy env file for production
 COPY --from=builder /usr/src/app/.env.production ./.env.production
 

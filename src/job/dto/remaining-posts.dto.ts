@@ -18,4 +18,11 @@ export class RemainingPostsResponseDto {
     example: 2
   })
   currentActivePosts: number;
+
+  @ApiProperty({
+    description: 'Company account type',
+    example: 'freemium-beta',
+    enum: ['freemium-beta', 'premium', 'enterprise']
+  })
+  accountType: string;
 }

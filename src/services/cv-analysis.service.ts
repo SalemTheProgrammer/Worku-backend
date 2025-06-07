@@ -11,153 +11,174 @@ import { FitScore, FitBreakdown, JobFitSummary, RecruiterRecommendations, Applic
 @Injectable()
 export class CVAnalysisService {
   private readonly logger = new Logger(CVAnalysisService.name);
+  private readonly fileCache = new Map<string, { content: string; mtime: number }>();
+  private readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  private readonly CACHE_TTL = 300000; // 5 minutes
 
   constructor(
     private readonly geminiClient: GeminiClientService,
     private readonly validationUtils: ValidationUtilsService
-  ) {}
+  ) {
+    // Cleanup cache periodically
+    setInterval(() => this.cleanupFileCache(), 600000); // 10 minutes
+  }
+
+  private cleanupFileCache(): void {
+    const now = Date.now();
+    for (const [key, value] of this.fileCache.entries()) {
+      if (now - value.mtime > this.CACHE_TTL) {
+        this.fileCache.delete(key);
+      }
+    }
+  }
 
   private async validateFileAccess(filePath: string): Promise<void> {
     try {
-      await fs.access(filePath);
-      this.logger.log(`File verified at path: ${filePath}`);
+      const stats = await fs.stat(filePath);
+      
+      if (stats.size > this.MAX_FILE_SIZE) {
+        throw new HttpException('File too large', HttpStatus.BAD_REQUEST);
+      }
+      
+      if (!stats.isFile()) {
+        throw new HttpException('Invalid file', HttpStatus.BAD_REQUEST);
+      }
+      
     } catch (error) {
-      this.logger.error(`Error accessing file: ${filePath}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`Error accessing file: ${filePath}`, error);
       throw new HttpException('File not accessible', HttpStatus.NOT_FOUND);
     }
   }
 
-  private async readFileContent(filePath: string): Promise<string> {
+  private async readFileContentCached(filePath: string): Promise<string> {
     try {
-      return await fs.readFile(filePath, 'utf-8');
+      const stats = await fs.stat(filePath);
+      const cacheKey = `${filePath}:${stats.mtime.getTime()}`;
+      
+      // Check cache first
+      const cached = this.fileCache.get(cacheKey);
+      if (cached && Date.now() - cached.mtime < this.CACHE_TTL) {
+        this.logger.debug(`Using cached content for: ${filePath}`);
+        return cached.content;
+      }
+
+      // Read file content
+      const content = await fs.readFile(filePath, 'utf-8');
+      
+      // Cache the result
+      this.fileCache.set(cacheKey, {
+        content,
+        mtime: Date.now()
+      });
+
+      // Clean up old cache entries for this file
+      for (const key of this.fileCache.keys()) {
+        if (key.startsWith(`${filePath}:`) && key !== cacheKey) {
+          this.fileCache.delete(key);
+        }
+      }
+
+      return content;
     } catch (error) {
-      this.logger.error(`Error reading file: ${filePath}`);
+      this.logger.error(`Error reading file: ${filePath}`, error);
       throw new HttpException('Error reading file', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
+  private detectFileType(filePath: string, content: string): { isPDF: boolean; fileExt: string } {
+    const fileExt = path.extname(filePath).toLowerCase();
+    const isPDF = fileExt === '.pdf' || 
+                  content.includes('%PDF') || 
+                  /[\x00-\x08\x0E-\x1F]/.test(content);
+    
+    return { isPDF, fileExt };
+  }
+
   async analyzeCV(filePath: string): Promise<ApplicationAnalysisResponse> {
-    this.logger.log(`Analyzing CV file at path: ${filePath}`);
+    const startTime = Date.now();
+    this.logger.log(`Starting CV analysis: ${filePath}`);
+    
     try {
       await this.validateFileAccess(filePath);
       
-      // Check file extension and size
-      const fileExt = path.extname(filePath).toLowerCase();
-      this.logger.debug(`File extension: ${fileExt}`);
+      const cvContent = await this.readFileContentCached(filePath);
       
-      const fileStats = await fs.stat(filePath);
-      this.logger.debug(`File size: ${fileStats.size} bytes`);
-      
-      const cvContent = await this.readFileContent(filePath);
-      this.logger.debug(`Read ${cvContent.length} characters from file`);
-
       if (!cvContent.trim()) {
-        this.logger.warn(`Empty CV content detected for file: ${filePath}`);
+        this.logger.warn(`Empty CV content: ${filePath}`);
         return this.createEmptyResponse('Le fichier CV est vide');
       }
 
-      // Enhanced PDF detection
-      const isPDF = fileExt === '.pdf' || cvContent.includes('%PDF') || /[\x00-\x08\x0E-\x1F]/.test(cvContent);
-      this.logger.debug(`File detected as PDF: ${isPDF}`);
+      const { isPDF } = this.detectFileType(filePath, cvContent);
       
-      if (isPDF) {
-        this.logger.log(`Processing file as PDF: ${filePath}`);
-        return this.analyzePDFFile(filePath);
-      }
+      const result = isPDF 
+        ? await this.analyzePDFFile(filePath)
+        : await this.analyzeTextFile(cvContent);
 
-      this.logger.log(`Processing file as text: ${filePath}`);
-      const prompt = createCVAnalysisPrompt(cvContent);
-      this.logger.debug(`Created analysis prompt with ${prompt.length} characters`);
-
-      try {
-        this.logger.debug('Sending content to Gemini API...');
-        const result = await this.geminiClient.generateContent(prompt);
-        this.logger.debug(`Received ${result.length} characters from Gemini API`);
-        
-        try {
-          this.logger.debug('Extracting JSON from response text...');
-          const jsonText = this.extractJsonFromText(result);
-          this.logger.debug(`Extracted JSON text: ${jsonText.substring(0, 100)}...`);
-          
-          const parsed = JSON.parse(jsonText);
-          this.logger.debug('Successfully parsed JSON response');
-
-          if (this.validationUtils.isValidApplicationAnalysisResponse(parsed)) {
-            this.logger.log('Successfully validated analysis response structure');
-            return parsed;
-          }
-          
-          this.logger.warn('❌ Invalid response structure:', parsed);
-          throw new Error('Invalid response structure');
-        } catch (error) {
-          this.logger.error(`Error parsing CV analysis response: ${error.message}`, error.stack);
-          throw error;
-        }
-      } catch (error) {
-        this.logger.error(`Error analyzing CV: ${error.message}`, error.stack);
-        return this.createEmptyResponse('Erreur lors de l\'analyse du CV');
-      }
+      const duration = Date.now() - startTime;
+      this.logger.log(`CV analysis completed in ${duration}ms`);
+      
+      return result;
     } catch (error) {
-      this.logger.error(`Unexpected error during CV analysis: ${error.message}`, error.stack);
+      const duration = Date.now() - startTime;
+      this.logger.error(`CV analysis failed after ${duration}ms:`, error);
+      
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
       return this.createEmptyResponse(`Erreur lors de l'analyse du CV: ${error.message}`);
     }
   }
 
+  private async analyzeTextFile(cvContent: string): Promise<ApplicationAnalysisResponse> {
+    try {
+      const prompt = createCVAnalysisPrompt(cvContent);
+      const result = await this.geminiClient.generateContent(prompt);
+      
+      const jsonText = this.extractJsonFromText(result);
+      const parsed = JSON.parse(jsonText);
+
+      if (this.validationUtils.isValidApplicationAnalysisResponse(parsed)) {
+        return parsed;
+      }
+      
+      throw new Error('Invalid response structure');
+    } catch (error) {
+      this.logger.error(`Text analysis error:`, error);
+      return this.createEmptyResponse('Erreur lors de l\'analyse du CV');
+    }
+  }
+
   private async analyzePDFFile(filePath: string): Promise<ApplicationAnalysisResponse> {
-    this.logger.log('\n=== PDF ANALYSIS STARTED ===');
-    this.logger.log(`File: ${filePath}`);
+    this.logger.debug(`Processing PDF: ${filePath}`);
 
     try {
-      this.logger.log('1. Reading PDF file...');
       const fileBuffer = await fs.readFile(filePath);
       const mimeType = 'application/pdf';
-      const fileSize = fileBuffer.length;
-      this.logger.log(`File size: ${fileSize} bytes`);
       
-      this.logger.log('2. Uploading file to Gemini...');
+      // Upload and analyze in parallel where possible
       const uploadedFile = await this.geminiClient.uploadFile(fileBuffer, mimeType);
-      this.logger.log('File uploaded successfully');
+      const result = await this.geminiClient.generateContentWithFile(
+        uploadedFile.uri, 
+        mimeType, 
+        PDF_ANALYSIS_PROMPT
+      );
       
-      this.logger.log('3. Creating analysis prompt...');
-      const prompt = PDF_ANALYSIS_PROMPT;
-      
-      this.logger.log('4. Requesting Gemini analysis...');
-      const result = await this.geminiClient.generateContentWithFile(uploadedFile.uri, mimeType, prompt);
-      this.logger.log('Received analysis response');
-      
-      try {
-        this.logger.log('5. Extracting JSON from response...');
-        const jsonText = this.extractJsonFromText(result);
-        this.logger.debug('Extracted JSON:', jsonText);
-        
-        const parsed = JSON.parse(jsonText);
-        this.logger.log('6. Validating response structure...');
+      const jsonText = this.extractJsonFromText(result);
+      const parsed = JSON.parse(jsonText);
 
-        if (this.validationUtils.isValidApplicationAnalysisResponse(parsed)) {
-          this.logger.log('✅ Analysis completed successfully');
-          this.logger.debug('Final analysis result:', parsed);
-          return parsed;
-        }
-
-        this.logger.warn('❌ Invalid response structure:', parsed);
-        return this.createEmptyResponse('Format de réponse invalide');
-      } catch (error) {
-        this.logger.error('❌ Error processing response:', {
-          error: error.message,
-          type: error.name,
-          stack: error.stack
-        });
-        return this.createEmptyResponse('Erreur lors du traitement');
+      if (this.validationUtils.isValidApplicationAnalysisResponse(parsed)) {
+        return parsed;
       }
+
+      return this.createEmptyResponse('Format de réponse invalide');
     } catch (error) {
-      this.logger.error('❌ PDF Analysis failed:', {
-        error: error.message,
-        type: error.name,
-        stack: error.stack,
-        file: filePath
-      });
+      this.logger.error(`PDF analysis error:`, error);
       throw new HttpException(
-        'Erreur lors de l\'analyse du CV',
+        'Erreur lors de l\'analyse du CV PDF',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -205,22 +226,21 @@ export class CVAnalysisService {
       // First attempt: try to parse as is
       JSON.parse(text);
       return text;
-    } catch (e) {
-      // Second attempt: Look for JSON object pattern using regex
+    } catch {
+      // Second attempt: Look for JSON object pattern
       const jsonPattern = /\{[\s\S]*\}/;
       const match = text.match(jsonPattern);
       
-      if (match && match[0]) {
+      if (match?.[0]) {
         try {
           JSON.parse(match[0]);
-          this.logger.log('Successfully extracted JSON from text response');
           return match[0];
-        } catch (err) {
-          this.logger.warn('Found JSON-like structure but it is not valid JSON');
+        } catch {
+          this.logger.warn('Found JSON-like structure but invalid');
         }
       }
       
-      this.logger.warn('Could not extract valid JSON, returning fallback response');
+      // Fallback response
       return JSON.stringify({
         signauxAlerte: [{
           type: 'Erreur de format',
@@ -232,11 +252,6 @@ export class CVAnalysisService {
     }
   }
 
-  // Prompt templates have been moved to src/prompts directory
-
-  /**
-   * Creates a default/fallback CV analysis response for when analysis fails
-   */
   private createDefaultCvFeedbackResponse(reason: string): CvAnalysisResponseDto {
     return {
       summary: {
@@ -261,123 +276,64 @@ export class CVAnalysisService {
     };
   }
 
-  /**
-   * Analyzes the CV content for feedback on the CV itself (not job matching)
-   * @param filePath Path to the CV file
-   * @returns CV feedback analysis
-   */
   async analyzeCVContent(filePath: string): Promise<CvAnalysisResponseDto> {
-    this.logger.log(`Analyzing CV content for feedback at path: ${filePath}`);
+    const startTime = Date.now();
+    this.logger.log(`Starting CV content analysis: ${filePath}`);
+    
     try {
       await this.validateFileAccess(filePath);
       
-      const fileExt = path.extname(filePath).toLowerCase();
-      this.logger.debug(`File extension: ${fileExt}`);
+      const cvContent = await this.readFileContentCached(filePath);
       
-      const fileStats = await fs.stat(filePath);
-      this.logger.debug(`File size: ${fileStats.size} bytes`);
-      
-      const cvContent = await this.readFileContent(filePath);
-      this.logger.debug(`Read ${cvContent.length} characters from file`);
-
       if (!cvContent.trim()) {
-        this.logger.warn(`Empty CV content detected for file: ${filePath}`);
         return this.createDefaultCvFeedbackResponse('Le fichier CV est vide');
       }
 
-      // Enhanced PDF detection
-      const isPDF = fileExt === '.pdf' || cvContent.includes('%PDF') || /[\x00-\x08\x0E-\x1F]/.test(cvContent);
-      this.logger.debug(`File detected as PDF: ${isPDF}`);
+      const { isPDF } = this.detectFileType(filePath, cvContent);
       
-      if (isPDF) {
-        this.logger.log(`Processing file as PDF for content feedback: ${filePath}`);
-        return this.analyzePDFContentFeedback(filePath);
-      }
+      const result = isPDF 
+        ? await this.analyzePDFContentFeedback(filePath)
+        : await this.analyzeTextContentFeedback(cvContent);
 
-      this.logger.log(`Processing file as text for content feedback: ${filePath}`);
-      const prompt = createCVFeedbackPrompt(cvContent);
-      this.logger.debug(`Created CV feedback prompt with ${prompt.length} characters`);
-
-      try {
-        this.logger.debug('Sending content to Gemini API for CV feedback...');
-        const result = await this.geminiClient.generateContent(prompt);
-        this.logger.debug(`Received ${result.length} characters from Gemini API`);
-        
-        try {
-          this.logger.debug('Extracting JSON from response text...');
-          const jsonText = this.extractJsonFromText(result);
-          this.logger.debug(`Extracted JSON text: ${jsonText.substring(0, 100)}...`);
-          
-          const parsed = JSON.parse(jsonText);
-          this.logger.debug('Successfully parsed JSON response for CV feedback');
-
-          // Validation could be added here if needed
-          return parsed as CvAnalysisResponseDto;
-        } catch (error) {
-          this.logger.error(`Error parsing CV feedback response: ${error.message}`, error.stack);
-          throw error;
-        }
-      } catch (error) {
-        this.logger.error(`Error analyzing CV content: ${error.message}`, error.stack);
-        return this.createDefaultCvFeedbackResponse('Erreur lors de l\'analyse du CV');
-      }
+      const duration = Date.now() - startTime;
+      this.logger.log(`CV content analysis completed in ${duration}ms`);
+      
+      return result;
     } catch (error) {
-      this.logger.error(`Unexpected error during CV content analysis: ${error.message}`, error.stack);
-      return this.createDefaultCvFeedbackResponse(`Erreur lors de l'analyse du CV: ${error.message}`);
+      const duration = Date.now() - startTime;
+      this.logger.error(`CV content analysis failed after ${duration}ms:`, error);
+      return this.createDefaultCvFeedbackResponse(`Erreur: ${error.message}`);
     }
   }
 
-  /**
-   * Analyzes PDF files for CV content feedback
-   */
-  private async analyzePDFContentFeedback(filePath: string): Promise<CvAnalysisResponseDto> {
-    this.logger.log('\n=== PDF CONTENT FEEDBACK ANALYSIS STARTED ===');
-    this.logger.log(`File: ${filePath}`);
-
+  private async analyzeTextContentFeedback(cvContent: string): Promise<CvAnalysisResponseDto> {
     try {
-      this.logger.log('1. Reading PDF file...');
-      const fileBuffer = await fs.readFile(filePath);
-      const mimeType = 'application/pdf';
-      const fileSize = fileBuffer.length;
-      this.logger.log(`File size: ${fileSize} bytes`);
+      const prompt = createCVFeedbackPrompt(cvContent);
+      const result = await this.geminiClient.generateContent(prompt);
       
-      this.logger.log('2. Uploading file to Gemini...');
-      const uploadedFile = await this.geminiClient.uploadFile(fileBuffer, mimeType);
-      this.logger.log('File uploaded successfully');
-      
-      this.logger.log('3. Creating CV feedback analysis prompt...');
-      const prompt = PDF_CV_FEEDBACK_PROMPT;
-      
-      this.logger.log('4. Requesting Gemini analysis for CV feedback...');
-      const result = await this.geminiClient.generateContentWithFile(uploadedFile.uri, mimeType, prompt);
-      this.logger.log('Received CV feedback analysis response');
-      
-      try {
-        this.logger.log('5. Extracting JSON from response...');
-        const jsonText = this.extractJsonFromText(result);
-        this.logger.debug('Extracted JSON:', jsonText);
-        
-        const parsed = JSON.parse(jsonText);
-        this.logger.log('6. Parsing CV feedback response...');
-
-        // Validation could be added here if needed
-        this.logger.log('✅ CV feedback analysis completed successfully');
-        return parsed as CvAnalysisResponseDto;
-      } catch (error) {
-        this.logger.error('❌ Error processing CV feedback response:', {
-          error: error.message,
-          type: error.name,
-          stack: error.stack
-        });
-        return this.createDefaultCvFeedbackResponse('Erreur lors du traitement');
-      }
+      const jsonText = this.extractJsonFromText(result);
+      return JSON.parse(jsonText) as CvAnalysisResponseDto;
     } catch (error) {
-      this.logger.error('❌ PDF Content Feedback Analysis failed:', {
-        error: error.message,
-        type: error.name,
-        stack: error.stack,
-        file: filePath
-      });
+      this.logger.error(`Text content analysis error:`, error);
+      return this.createDefaultCvFeedbackResponse('Erreur lors de l\'analyse du CV');
+    }
+  }
+
+  private async analyzePDFContentFeedback(filePath: string): Promise<CvAnalysisResponseDto> {
+    try {
+      const fileBuffer = await fs.readFile(filePath);
+      const uploadedFile = await this.geminiClient.uploadFile(fileBuffer, 'application/pdf');
+      
+      const result = await this.geminiClient.generateContentWithFile(
+        uploadedFile.uri, 
+        'application/pdf', 
+        PDF_CV_FEEDBACK_PROMPT
+      );
+      
+      const jsonText = this.extractJsonFromText(result);
+      return JSON.parse(jsonText) as CvAnalysisResponseDto;
+    } catch (error) {
+      this.logger.error(`PDF content analysis error:`, error);
       return this.createDefaultCvFeedbackResponse('Erreur lors de l\'analyse du PDF');
     }
   }

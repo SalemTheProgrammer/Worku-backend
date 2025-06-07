@@ -88,4 +88,17 @@ export class CompanyDashboardStatsDto {
     example: 7
   })
   currentActiveOffers: number;
+
+  @ApiProperty({
+    description: 'Company account type',
+    example: 'freemium-beta',
+    enum: ['freemium-beta', 'premium', 'enterprise']
+  })
+  accountType: string;
+
+  @ApiProperty({
+    description: 'Whether the company profile is completed',
+    example: true
+  })
+  profileCompleted: boolean;
 }

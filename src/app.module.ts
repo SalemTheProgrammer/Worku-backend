@@ -129,15 +129,16 @@ import { AppService } from './app.service';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(RateLimiterMiddleware)
-      .exclude(
-        { path: 'health', method: RequestMethod.ALL },
-        { path: 'api', method: RequestMethod.ALL },
-        { path: 'uploads/*filePath', method: RequestMethod.GET },
-        { path: 'public/*filePath', method: RequestMethod.GET },
-        { path: 'assets/*filePath', method: RequestMethod.GET }
-      )
-      .forRoutes({ path: '*path', method: RequestMethod.ALL });
+    // TEMPORARILY COMMENTED OUT - Rate limiter middleware disabled
+    // consumer
+    //   .apply(RateLimiterMiddleware)
+    //   .exclude(
+    //     { path: 'health', method: RequestMethod.ALL },
+    //     { path: 'api', method: RequestMethod.ALL },
+    //     { path: 'uploads/*filePath', method: RequestMethod.GET },
+    //     { path: 'public/*filePath', method: RequestMethod.GET },
+    //     { path: 'assets/*filePath', method: RequestMethod.GET }
+    //   )
+    //   .forRoutes({ path: '*path', method: RequestMethod.ALL });
   }
 }

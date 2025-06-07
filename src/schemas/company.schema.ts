@@ -89,6 +89,12 @@ export class Company {
 
   @Prop({ type: [{ type: Object }] })
   invitedUsers: InvitedUser[];
+
+  @Prop({ type: Number, default: 5 })
+  remainingJobs: number;
+
+  @Prop({ type: String, enum: ['freemium-beta', 'premium', 'enterprise'], default: 'freemium-beta' })
+  accountType: string;
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);

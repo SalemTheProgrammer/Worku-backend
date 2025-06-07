@@ -176,4 +176,5 @@ export class CompanyController {
       message: 'Déconnexion réussie',
     };
   }
+
 }

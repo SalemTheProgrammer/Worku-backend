@@ -1,50 +1,80 @@
-# Version control
-.git
-.gitignore
-.gitattributes
-
 # Dependencies
 node_modules
-npm-debug.log
-yarn-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Environment files
-.env
-.env.*
-!.env.production
+# Build outputs
+dist
+coverage
+*.tsbuildinfo
 
 # Development files
-test
-coverage
-.vscode
-.idea
-*.spec.ts
-*.test.ts
-
-# Build output
-dist
-build
+.env
+.env.local
+.env.development
+.env.test
 
 # Logs
 logs
 *.log
 
-# Upload directory (will be created in container)
-uploads/*
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
-# Documentation
-README.md
-CHANGELOG.md
-docs
-*.md
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git
+.gitignore
 
 # Docker
-Dockerfile
+Dockerfile*
 docker-compose*.yml
 .dockerignore
 
-# Other
-.DS_Store
-*.swp
-*.swo
+# Documentation
+README.md
+docs/
+*.md
+
+# Test files
+test/
+*.test.ts
+*.spec.ts
+
+# Uploads (will be mounted as volume)
+uploads/
+
+# Scripts that shouldn't be in container
+scripts/
+
+# Monitoring files
+monitoring/
+
+# Environment examples
+.env.example
+.env.production.example

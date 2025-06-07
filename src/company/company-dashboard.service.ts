@@ -35,7 +35,7 @@ export class CompanyDashboardService {
       this.getTimeBasedStats(companyId, startOfMonth, now),
       this.getTimeBasedStats(companyId, startOfYear, now),
       this.getLastActivities(companyId, 3),
-      this.getRemainingOffersData(companyId)
+      this.getRemainingOffersData(companyId, company)
     ]);
 
     return {
@@ -45,7 +45,9 @@ export class CompanyDashboardService {
       lastActivities,
       remainingOffers: remainingOffersData.remainingOffers,
       totalAllowedOffers: remainingOffersData.totalAllowedOffers,
-      currentActiveOffers: remainingOffersData.currentActiveOffers
+      currentActiveOffers: remainingOffersData.currentActiveOffers,
+      accountType: company.accountType || 'freemium-beta',
+      profileCompleted: company.profileCompleted || false
     };
   }
 
@@ -104,7 +106,7 @@ export class CompanyDashboardService {
     }));
   }
 
-  private async getRemainingOffersData(companyId: string) {
+  private async getRemainingOffersData(companyId: string, company?: any) {
     const companyObjectId = new Types.ObjectId(companyId);
 
     // Count currently active offers
@@ -114,10 +116,27 @@ export class CompanyDashboardService {
       expiresAt: { $gt: new Date() }
     });
 
-    // For authenticated companies, let's assume they have a limit of 10 offers
-    // This could be configurable based on company subscription tier
-    const totalAllowedOffers = 10;
-    const remainingOffers = Math.max(0, totalAllowedOffers - currentActiveOffers);
+    // Get company data if not provided
+    if (!company) {
+      company = await this.companyModel.findById(companyId, 'remainingJobs accountType');
+    }
+
+    // Get total allowed offers based on account type
+    const getTotalAllowedOffers = (accountType: string) => {
+      switch (accountType) {
+        case 'freemium-beta':
+          return 5;
+        case 'premium':
+          return 25;
+        case 'enterprise':
+          return 100;
+        default:
+          return 5;
+      }
+    };
+
+    const totalAllowedOffers = getTotalAllowedOffers(company?.accountType || 'freemium-beta');
+    const remainingOffers = Math.max(0, company?.remainingJobs || 0);
 
     return {
       remainingOffers,

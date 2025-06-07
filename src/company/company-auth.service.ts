@@ -1,6 +1,6 @@
-import { Injectable, ConflictException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, ClientSession } from 'mongoose';
 import { Company } from '../schemas/company.schema';
 import { RegisterCompanyDto, VerifyCompanyOtpDto } from './dto/register-company.dto';
 import { VerifyLoginDto } from './dto/login-company.dto';
@@ -13,19 +13,20 @@ import { CompanyActionType } from '../journal/enums/action-types.enum';
 
 @Injectable()
 export class CompanyAuthService {
+  private readonly logger = new Logger(CompanyAuthService.name);
+
   constructor(
-    @InjectModel(Company.name) private companyModel: Model<Company>,
+    @InjectModel(Company.name) private readonly companyModel: Model<Company>,
     private readonly otpService: OtpService,
     private readonly authService: AuthService,
     private readonly companyJournalService: CompanyJournalService,
   ) {}
 
-  // Helper function to create the response object
   private createCompanyResponse(companyData: any, nomDeUtilisateur: string | null, role: UserRole): CompanyResponse {
     return {
       _id: companyData._id,
       nomDeUtilisateur: nomDeUtilisateur,
-      nomUtilisateur: nomDeUtilisateur, // Add alias field
+      nomUtilisateur: nomDeUtilisateur,
       role,
       nomEntreprise: companyData.nomEntreprise,
       email: companyData.email,
@@ -47,80 +48,65 @@ export class CompanyAuthService {
       verified: companyData.verified,
       lastLoginAt: companyData.lastLoginAt,
       invitedUsers: companyData.invitedUsers,
+      remainingJobs: companyData.remainingJobs || 5,
+      accountType: companyData.accountType || 'freemium-beta',
       createdAt: companyData.createdAt,
       updatedAt: companyData.updatedAt
     };
   }
 
   async registerCompany(registerCompanyDto: RegisterCompanyDto): Promise<void> {
-    const { email, nomEntreprise } = registerCompanyDto;
+    const { email, nomEntreprise, numeroRNE } = registerCompanyDto;
+    const normalizedEmail = email.toLowerCase().trim();
 
+    const session: ClientSession = await this.companyModel.db.startSession();
+    
     try {
-      const normalizedEmail = email.toLowerCase().trim();
-      console.log('Processing registration for:', normalizedEmail);
+      await session.withTransaction(async () => {
+        // Check for existing company and candidate in parallel
+        const [existingCompany, existingCandidate, existingRNE] = await Promise.all([
+          this.companyModel.findOne({ 
+            email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } 
+          }).session(session),
+          this.companyModel.db.model('Candidate').findOne({ 
+            email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } 
+          }).session(session),
+          this.companyModel.findOne({ numeroRNE }).session(session)
+        ]);
 
-      // Check if company already exists using case-insensitive email check
-      console.log('Checking for existing company with email:', email);
-      const existingCompany = await this.companyModel.findOne({
-        email: { $regex: new RegExp(`^${email}$`, 'i') }
-      });
-      console.log('Existing company:', existingCompany);
+        if (existingCompany) {
+          throw new ConflictException('Cet email est déjà utilisé par une entreprise');
+        }
 
-      if (existingCompany) {
-        throw new ConflictException('Cet email est déjà utilisé par une entreprise');
-      }
+        if (existingCandidate) {
+          throw new ConflictException('Cet email est déjà utilisé par un candidat');
+        }
 
-      // Check if email is used by a candidate
-      const candidateModel = this.companyModel.db.model('Candidate');
-      const existingCandidate = await candidateModel.findOne({
-        email: { $regex: new RegExp(`^${email}$`, 'i') }
-      });
+        if (existingRNE) {
+          throw new ConflictException('Ce numéro RNE est déjà utilisé par une autre entreprise');
+        }
 
-      if (existingCandidate) {
-        throw new ConflictException('Cet email est déjà utilisé par un candidat');
-      }
+        // Create the company document
+        const companyData = {
+          nomEntreprise,
+          email: normalizedEmail,
+          numeroRNE,
+          verified: false,
+          profileCompleted: false,
+          invitedUsers: [],
+          remainingJobs: 5,
+          accountType: 'freemium-beta',
+        };
 
-      // Check if RNE number already exists
-      const existingRNE = await this.companyModel.findOne({
-        numeroRNE: registerCompanyDto.numeroRNE
-      });
-
-      if (existingRNE) {
-        throw new ConflictException('Ce numéro RNE est déjà utilisé par une autre entreprise');
-      }
-
-      // Create the company document
-      console.log('Creating new company:', { nomEntreprise, email, numeroRNE: registerCompanyDto.numeroRNE });
-      const company = new this.companyModel({
-        nomEntreprise,
-        email: email.toLowerCase(), // Store email in lowercase
-        numeroRNE: registerCompanyDto.numeroRNE,
-        verified: false,
-        profileCompleted: false,
-        invitedUsers: [],
+        await this.companyModel.create([companyData], { session });
       });
 
-      // Save to database
-      await company.save();
-
-      // Double-check the save was successful
-      const savedCompany = await this.companyModel.findOne({
-        email: email.toLowerCase()
-      });
-
-      if (!savedCompany) {
-        console.error('Company save verification failed');
-        throw new Error('Failed to save company');
-      }
-
-      console.log('Company saved successfully:', savedCompany);
-
-      // Send OTP
-      await this.otpService.sendOtp(email);
-      console.log('OTP sent successfully to:', email);
-
+      // Send OTP after successful company creation
+      await this.otpService.sendOtp(normalizedEmail);
+      this.logger.log(`Company registered successfully: ${normalizedEmail}`);
+      
     } catch (error) {
-      console.error('Error in registerCompany:', error);
+      this.logger.error('Registration error:', error);
 
       if (error.code === 11000) {
         throw new ConflictException('Cet email est déjà utilisé par une entreprise');
@@ -131,30 +117,36 @@ export class CompanyAuthService {
       }
 
       throw new BadRequestException('Erreur lors de l\'inscription de l\'entreprise');
+    } finally {
+      await session.endSession();
     }
   }
 
   async verifyCompany(verifyCompanyOtpDto: VerifyCompanyOtpDto) {
     const { email, otp } = verifyCompanyOtpDto;
+    const normalizedEmail = email.toLowerCase().trim();
+
     try {
-      await this.otpService.verifyOtp(email, otp);
+      // Verify OTP first
+      await this.otpService.verifyOtp(normalizedEmail, otp);
     } catch {
       throw new UnauthorizedException('Code OTP invalide ou expiré');
     }
 
-    // Retrieve company from database after OTP verification
-    const company = await this.companyModel.findOne({ email });
+    // Update company verification status
+    const company = await this.companyModel.findOneAndUpdate(
+      { email: normalizedEmail },
+      { verified: true, lastLoginAt: new Date() },
+      { new: true }
+    );
+
     if (!company) {
       throw new BadRequestException('Aucune inscription en attente trouvée pour cet email');
     }
 
-    // Update company verification status
-    company.verified = true;
-    await company.save();
-
     const tokens = await this.authService.generateTokens({
       userId: company.id,
-      email,
+      email: normalizedEmail,
       role: UserRole.ADMIN,
       companyId: company.id,
     });
@@ -174,19 +166,15 @@ export class CompanyAuthService {
     const { email, otp } = verifyLoginDto;
     const normalizedEmail = email.toLowerCase().trim();
 
-    console.log('Starting login verification for:', normalizedEmail);
-
     try {
-      // First, find the company and validate user status
-      console.log('Looking for company with email:', normalizedEmail);
+      // Find company efficiently with single query
       const company = await this.companyModel.findOne({
         $or: [
           { email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } },
           { 'invitedUsers.email': { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } }
         ]
-      });
+      }).lean();
 
-      console.log('Company search result:', company ? 'Found' : 'Not found');
       if (!company) {
         throw new BadRequestException('Cette entreprise n\'existe pas');
       }
@@ -195,61 +183,57 @@ export class CompanyAuthService {
         throw new BadRequestException('Cette entreprise n\'est pas encore vérifiée');
       }
 
-      console.log('Checking if user is invited');
+      // Determine user type and role
       const isInvitedUser = company.email.toLowerCase() !== normalizedEmail;
-      console.log('Is invited user:', isInvitedUser);
       let userRole = UserRole.ADMIN;
       let nomDeUtilisateur = company.nomEntreprise;
-      let invitedUser;
+      let invitedUser: any = null;
 
       if (isInvitedUser) {
         invitedUser = company.invitedUsers?.find(
           user => user.email.toLowerCase() === normalizedEmail
         );
+        
         if (!invitedUser) {
           throw new BadRequestException('Cette entreprise n\'existe pas');
         }
+        
         userRole = UserRole.USER;
         nomDeUtilisateur = invitedUser.nomDeUtilisateur;
       }
 
-      // Then verify OTP
-      console.log('Attempting OTP verification');
-      try {
-        await this.otpService.verifyOtp(normalizedEmail, otp);
-        console.log('OTP verification successful');
-      } catch (error) {
-        console.error('OTP verification failed:', error);
-        throw new UnauthorizedException('Code OTP invalide ou expiré');
+      // Verify OTP
+      await this.otpService.verifyOtp(normalizedEmail, otp);
+
+      // Update company status
+      const updateData: any = { lastLoginAt: new Date() };
+      if (isInvitedUser && invitedUser) {
+        updateData['invitedUsers.$.isAccepted'] = true;
       }
 
-      // Update company and user status after successful OTP verification
-      company.lastLoginAt = new Date();
-      if (isInvitedUser && invitedUser) {
-        invitedUser.isAccepted = true;
-      }
-      await company.save();
+      await this.companyModel.updateOne(
+        isInvitedUser 
+          ? { _id: company._id, 'invitedUsers.email': normalizedEmail }
+          : { _id: company._id },
+        updateData
+      );
       
-      // Log the login activity
-      await this.companyJournalService.logActivity(
-        company.id,
+      // Log activity asynchronously
+      this.companyJournalService.logActivity(
+        company._id.toString(),
         CompanyActionType.CONNEXION,
-        {
-          isInvitedUser,
-          userRole,
-          nomDeUtilisateur
-        },
+        { isInvitedUser, userRole, nomDeUtilisateur },
         `Connexion réussie pour ${normalizedEmail}`
+      ).catch(error => 
+        this.logger.warn('Failed to log activity:', error)
       );
 
-      const companyData = company.toObject();
-      const response = this.createCompanyResponse(companyData, nomDeUtilisateur, userRole);
-
+      const response = this.createCompanyResponse(company, nomDeUtilisateur, userRole);
       const tokens = await this.authService.generateTokens({
-        userId: company.id,
+        userId: company._id.toString(),
         email: normalizedEmail,
         role: userRole,
-        companyId: company.id,
+        companyId: company._id.toString(),
       });
 
       return { company: response, tokens };
@@ -257,6 +241,7 @@ export class CompanyAuthService {
       if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
         throw error;
       }
+      this.logger.error('Login verification error:', error);
       throw new BadRequestException('Erreur lors de la vérification de connexion');
     }
   }

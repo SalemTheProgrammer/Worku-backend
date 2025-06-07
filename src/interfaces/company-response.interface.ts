@@ -30,6 +30,8 @@ export interface CompanyResponse {
     nomDeUtilisateur: string;
     isAccepted: boolean;
   }>;
+  remainingJobs?: number;
+  accountType?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
