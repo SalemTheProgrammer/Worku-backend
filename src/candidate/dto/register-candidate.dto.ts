@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsString, MinLength, IsEnum, IsOptional, IsDate } from 'class-validator';
 import { EmploymentStatus } from '../enums/employment-status.enum';
 import { ProfessionalStatus } from '../../job/enums/professional-status.enum';
+import { IsProperName } from '../../common/validators/proper-name.validator';
 
 export class RegisterCandidateDto {
   @ApiProperty({ example: 'john.doe@example.com' })
@@ -12,11 +13,13 @@ export class RegisterCandidateDto {
   @ApiProperty({ example: 'John' })
   @IsString()
   @IsNotEmpty()
+  @IsProperName()
   firstName: string;
 
   @ApiProperty({ example: 'Doe' })
   @IsString()
   @IsNotEmpty()
+  @IsProperName()
   lastName: string;
 
   @ApiProperty({ example: 'password123' })

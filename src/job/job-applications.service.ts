@@ -3,13 +3,17 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Job, JobDocument } from '../schemas/job.schema';
 import { Application, ApplicationDocument } from '../schemas/application.schema';
+import { Candidate, CandidateDocument } from '../schemas/candidate.schema';
 import { JobApplicationsResponseDto } from './dto/job-applications.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class JobApplicationsService {
   constructor(
     @InjectModel(Job.name) private jobModel: Model<JobDocument>,
-    @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>
+    @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
+    @InjectModel(Candidate.name) private candidateModel: Model<CandidateDocument>,
+    private notificationsService: NotificationsService
   ) {}
 
   async getJobApplications(companyId: string, jobId: string): Promise<JobApplicationsResponseDto> {
@@ -98,9 +102,17 @@ export class JobApplicationsService {
       throw new NotFoundException('Invalid job or candidate ID');
     }
 
-    const job = await this.jobModel.findById(jobId).exec();
+    const [job, candidate] = await Promise.all([
+      this.jobModel.findById(jobId).exec(),
+      this.candidateModel.findById(candidateId).select('firstName lastName email').exec()
+    ]);
+
     if (!job) {
       throw new NotFoundException('Job not found');
+    }
+
+    if (!candidate) {
+      throw new NotFoundException('Candidate not found');
     }
 
     const candidateObjectId = new Types.ObjectId(candidateId);
@@ -115,6 +127,23 @@ export class JobApplicationsService {
     ).exec();
 
     console.log('Updated job applications:', updatedJob?.applications);
+
+    // Create a notification for the company
+    try {
+      const candidateName = `${candidate.firstName} ${candidate.lastName}`;
+      await this.notificationsService.createApplicationNotification(
+        job.companyId.toString(),
+        jobId,
+        candidateId,
+        // For now, we'll use a generated application ID - this should be replaced with actual application creation
+        new Types.ObjectId().toString(),
+        candidateName,
+        job.title
+      );
+    } catch (notificationError) {
+      // Log the error but don't fail the application process
+      console.error('Failed to create notification:', notificationError);
+    }
 
     return { message: 'Job application submitted successfully.' };
   }

@@ -31,7 +31,7 @@ export class CandidateAuthController {
       }
     }
   })
-  @ApiResponse({ status: 400, description: 'Bad Request - Email already exists' })
+  @ApiResponse({ status: 409, description: 'Conflict - already exists' })
   async register(@Body() registerCandidateDto: RegisterCandidateDto) {
     try {
       await this.candidateService.register(registerCandidateDto);

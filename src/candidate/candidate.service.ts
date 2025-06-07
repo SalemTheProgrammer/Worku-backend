@@ -176,7 +176,7 @@ export class CandidateService {
 
     const existingCandidate = await this.candidateModel.findOne({ email });
     if (existingCandidate) {
-      throw new HttpException('Email already exists', HttpStatus.BAD_REQUEST);
+      throw new HttpException('already exists', HttpStatus.CONFLICT);
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

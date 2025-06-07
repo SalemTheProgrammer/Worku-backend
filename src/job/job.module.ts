@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { JobController } from './job.controller';
 import { JobApplicationsController } from './job-applications.controller';
 import { JobService } from './job.service';
+import { JobApplicationsService } from './job-applications.service';
 import { ApplicationModule } from '../application/application.module';
 import { JobBaseService } from './services/job-base.service';
 import { JobCacheService } from './services/job-cache.service';
@@ -18,6 +19,7 @@ import { RedisCacheModule } from '../cache/cache.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JobMapperImpl } from './interfaces/job-mapper.interface';
 import { JournalModule } from '../journal/journal.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 const schemas = [
   { name: Job.name, schema: JobSchema },
@@ -29,6 +31,7 @@ const schemas = [
 
 const services = [
   JobService,
+  JobApplicationsService,
   JobBaseService,
   JobCacheService,
   JobViewService,
@@ -46,7 +49,8 @@ const services = [
     RedisCacheModule,
     ScheduleModule.forRoot(),
     ApplicationModule,
-    JournalModule
+    JournalModule,
+    NotificationsModule
   ],
   controllers: [JobController, JobApplicationsController],
   providers: [...services],
