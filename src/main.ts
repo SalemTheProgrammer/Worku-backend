@@ -31,11 +31,13 @@ async function bootstrap() {
       .map(origin => origin.trim());
       
     if (corsOrigins.length === 0) {
-      // Fallback for development
-      corsOrigins.push(process.env.NODE_ENV === 'production'
-        ? 'https://your-frontend-domain.com'
-        : 'http://localhost:4200'
-      );
+      // Fallback for development - include both Angular frontend and SSR frontend
+      if (process.env.NODE_ENV === 'production') {
+        corsOrigins.push('https://your-frontend-domain.com');
+      } else {
+        corsOrigins.push('http://localhost:4200'); // Angular Frontend
+        corsOrigins.push('http://localhost:4000'); // SSR Frontend
+      }
     }
 
     app.enableCors({
@@ -63,10 +65,10 @@ async function bootstrap() {
           .filter(origin => origin)
           .map(origin => origin.trim());
         const origin = allowedOrigins.length > 0
-          ? allowedOrigins[0]
+          ? allowedOrigins.join(', ')
           : process.env.NODE_ENV === 'production'
             ? 'https://your-frontend-domain.com'
-            : 'http://localhost:4200';
+            : 'http://localhost:4200, http://localhost:4000';
         
         res.set('Access-Control-Allow-Origin', origin);
         res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');

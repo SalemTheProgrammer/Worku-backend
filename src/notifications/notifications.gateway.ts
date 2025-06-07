@@ -15,7 +15,7 @@ import { NotificationResponseDto } from './dto/notification.dto';
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // Configure this properly for production
+    origin: ['http://localhost:4200', 'http://localhost:4000'], // Angular Frontend and SSR Frontend
     methods: ['GET', 'POST'],
     credentials: true,
   },

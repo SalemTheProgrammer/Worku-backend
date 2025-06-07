@@ -17,6 +17,7 @@ import { InterviewModule } from './interview/interview.module';
 import { JournalModule } from './journal/journal.module';
 import { RejectionModule } from './rejection/rejection.module';
 import { RecommendedJobsModule } from './recommended-jobs/recommended-jobs.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import configuration from './common/config/configuration';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -101,6 +102,7 @@ import { AppService } from './app.service';
     JournalModule,
     RejectionModule,
     RecommendedJobsModule,
+    NotificationsModule,
     MetricsModule,
   ],
   providers: [
